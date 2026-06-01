@@ -1,5 +1,6 @@
 /* Registry Editor - FCCF Version */
 const [getSelectedKey, setSelectedKey, subscribeKey] = FCCF.useState('System');
+const [getSidebarWidth, setSidebarWidth, subscribeSidebarWidth] = FCCF.useState(200);
 
 const treeData = [
     { text: 'HKEY_LOCAL_MACHINE', children: [
@@ -25,24 +26,21 @@ const tree = FCCF.Controls.Tree({
     }
 });
 
-const [getSidebarWidth, setSidebarWidth, subscribeSidebarWidth] = FCCF.useState(150);
-
 const sidebar = FCCF.Controls.Pane({
-    style: { width: getSidebarWidth() + "px", borderRight: '1px solid #ccc', overflow: 'auto', background: 'white' },
+    style: { width: getSidebarWidth() + 'px', borderRight: 'none', overflow: 'auto', background: 'white', flexShrink: 0 },
     children: [tree]
 });
 
+const mainArea = FCCF.Controls.Pane({
+    style: { flexGrow: 1, flexBasis: 0, padding: '10px', background: 'white', overflow: 'auto' }
+});
 
-let prev = 150;
 const splitter = FCCF.Controls.Splitter({
     vertical: true,
     onResize: (delta) => {
-        setSidebarWidth(prev => Math.max(100, Math.min(300, prev + delta)));
+        const newWidth = Math.max(100, Math.min(500, getSidebarWidth() + delta));
+        setSidebarWidth(newWidth);
     }
-})
-
-const mainArea = FCCF.Controls.Pane({
-    style: { flexGrow: 1, padding: '10px', background: 'white', overflow: 'auto' }
 });
 
 const renderValues = (keyPath) => {
@@ -52,14 +50,30 @@ const renderValues = (keyPath) => {
         const table = document.createElement('table');
         table.style.width = '100%';
         table.style.fontSize = '11px';
-        table.innerHTML = '<thead><tr style="text-align:left;"><th>Name</th><th>Type</th><th>Data</th></tr></thead><tbody></tbody>';
+        table.style.borderCollapse = 'collapse';
+        table.innerHTML = '<thead><tr style="text-align:left;background:#ece9d8;border-bottom:1px solid #aca899;"><th style="padding:2px 5px;">Name</th><th style="padding:2px 5px;">Type</th><th style="padding:2px 5px;">Data</th></tr></thead><tbody></tbody>';
         const tbody = table.querySelector('tbody');
         
         for (const k in data) {
             const tr = document.createElement('tr');
             const val = data[k];
             const type = typeof val === 'string' ? 'REG_SZ' : (typeof val === 'number' ? 'REG_DWORD' : 'REG_BINARY');
-            tr.innerHTML = `<td>${k}</td><td>${type}</td><td>${JSON.stringify(val)}</td>`;
+            tr.innerHTML = `<td style="padding:2px 5px;">${k}</td><td style="padding:2px 5px;">${type}</td><td style="padding:2px 5px;">${JSON.stringify(val)}</td>`;
+            tr.style.cursor = 'pointer';
+            tr.onclick = () => {
+                XP_API.showDialog({
+                    type: 'prompt',
+                    title: 'Edit String',
+                    message: `Value name: ${k}\nValue data:`,
+                    value: typeof val === 'string' ? val : JSON.stringify(val),
+                    onOk: (newVal) => {
+                        let parsed = newVal;
+                        if (type === 'REG_DWORD') parsed = parseInt(newVal);
+                        XP_API.Registry.set(keyPath + '/' + k, parsed);
+                        renderValues(keyPath);
+                    }
+                });
+            };
             tbody.appendChild(tr);
         }
         mainArea.appendChild(table);
@@ -70,17 +84,21 @@ const renderValues = (keyPath) => {
 
 const layout = FCCF.Controls.Pane({
     style: { display: 'flex', height: '100%' },
-    children: [sidebar, mainArea]
+    children: [sidebar, splitter, mainArea]
 });
 
 const winId = FCCF.Window({
     title: 'Registry Editor',
     width: 600,
     height: 450,
-    content: layout
+    content: layout,
+    resizable: true
 });
 
 subscribeKey(key => renderValues(key));
+subscribeSidebarWidth(width => {
+    sidebar.style.width = width + 'px';
+});
 
 // Initial render
 renderValues(getSelectedKey());

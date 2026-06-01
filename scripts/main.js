@@ -336,17 +336,21 @@ window.onload = function() {
         // Fix start menu position based on taskbar height
         var updateStartMenuPos = function() {
             var taskbar = document.getElementById('taskbar');
-            if (taskbar) {
+            var startMenu = document.getElementById('start-menu');
+            if (taskbar && startMenu) {
                 var h = taskbar.offsetHeight || 30;
+                if (h < 20) h = 30; // Fallback if not rendered yet
                 document.documentElement.style.setProperty('--taskbar-height', h + 'px');
                 startMenu.style.bottom = h + 'px';
             }
         };
-        setTimeout(updateStartMenuPos, 100);
+        setTimeout(updateStartMenuPos, 50);
+        setTimeout(updateStartMenuPos, 500); // Second pass to be sure
         window.addEventListener('resize', updateStartMenuPos);
 
         startBtn.onclick = function(e) {
             e.stopPropagation();
+            updateStartMenuPos(); // Update before showing
             startMenu.classList.toggle('open');
         };
 
