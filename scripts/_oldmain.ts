@@ -1,13 +1,52 @@
+import { XP_API, XpUser } from "./api";
+import { VFS } from "./vfs";
+import { preloadApps } from "./preload";
+
+// SystemExceptionHandler.ts
+
+export function initGlobalErrorHandler(XP_API: any) {
+    // Catch standard synchronous/runtime exceptions
+    window.onerror = function (message, source, lineno, colno, error) {
+        console.error("🚨 CRITICAL SYSTEM CRASH:", message, "at", source, `:${lineno}:${colno}`);
+        
+        // Trigger your gorgeous ADR Runtime Error window dynamically
+        if (XP_API && typeof XP_API.showDialog === 'function') {
+            XP_API.showDialog({
+                title: "System Error",
+                type: "critical",
+                message: `An unhandled exception occurred: ${message}\nLine: ${lineno}`,
+            });
+        }
+        
+        // Return true to prevent the browser from logging the default red text to console
+        return false; 
+    };
+
+    // Catch asynchronous Promise rejections (like a failed VFS fetch or network drop)
+    window.addEventListener('unhandledrejection', (event) => {
+        console.error("⏳ UNHANDLED PROMISE REJECTION:", event.reason);
+        
+        if (XP_API && typeof XP_API.showDialog === 'function') {
+            XP_API.showDialog({
+                title: "Application Error",
+                type: "warning",
+                message: `Failed execution in async thread: ${event.reason?.message || event.reason}`,
+            });
+        }
+        event.preventDefault(); // Stop the default console noise
+    });
+}
+
 /* Main Entry Point (ES5) */
 window.onload = function() {
     // Preload Apps into VFS
     preloadApps();
 
     function systemBoot() {
-        var users = XP_API.Registry.get('Security/Users');
+        const users = XP_API.Registry.get<Record<string, XpUser>>('Security/Users');
         if (!users) return;
         
-        var defaults = {
+        const defaults: Record<string, string> = {
             'Administrator': '12345678',
             'User': '1234'
         };
@@ -71,8 +110,8 @@ window.onload = function() {
         right.style.paddingLeft = '50px';
         middle.appendChild(right);
 
-        var users = XP_API.Registry.get('Security/Users');
-        for (var u in users) {
+        var users = XP_API.Registry.get<Record<string, XpUser>>('Security/Users');
+        for (const u in users) {
             (function(user) {
                 var userContainer = document.createElement('div');
                 userContainer.style.display = 'flex';
@@ -91,7 +130,7 @@ window.onload = function() {
                 userDiv.onmouseout = function() { userDiv.style.background = 'transparent'; };
                 
                 var img = document.createElement('img');
-                img.src = user.avatar;
+                img.src = user.avatar || "";
                 img.style.width = '48px';
                 img.style.height = '48px';
                 img.style.border = '2px solid #fff';
@@ -164,7 +203,7 @@ window.onload = function() {
                 userDiv.onclick = function() {
                     // Hide all other pwd areas
                     var allPwdAreas = right.querySelectorAll('.pwd-area');
-                    allPwdAreas.forEach(function(area) { area.style.display = 'none'; });
+                    allPwdAreas.forEach((area) => { (area as HTMLElement).style.display = 'none'; });
                     
                     if (user.username === 'Guest') {
                         if (XP_API.Auth.login('Guest', '')) {
@@ -190,7 +229,7 @@ window.onload = function() {
                 
                 pwdInput.onkeydown = function(e) {
                     errorMsg.style.display = 'none';
-                    if (e.key === 'Enter') goBtn.onclick();
+                    if (e.key === 'Enter') goBtn.click();
                 };
                 
                 right.appendChild(userContainer);
@@ -238,8 +277,8 @@ window.onload = function() {
             overlay.appendChild(shutDownBox);
             document.body.appendChild(overlay);
             
-            overlay.querySelector('#btn-cancel').onclick = function() { overlay.remove(); };
-            overlay.querySelector('#btn-off').onclick = function() {
+            (overlay.querySelector('#btn-cancel') as HTMLElement).onclick = () => { overlay.remove(); };
+            (overlay.querySelector('#btn-off') as HTMLElement).onclick = () => {
                 document.body.innerHTML = '<div style="background:black;color:white;height:100vh;display:flex;align-items:center;justify-content:center;font-family:Tahoma;">It is now safe to turn off your computer.</div>';
             };
         };
@@ -257,74 +296,78 @@ window.onload = function() {
         }
 
         // Load SCT Settings
-        var sct = XP_API.getSCT();
-        if (sct.Wallpaper) {
-            document.getElementById('desktop').style.backgroundImage = 'url(' + sct.Wallpaper + ')';
+        const sct = XP_API.getSCT<Record<string, unknown>>();
+        if (!sct)
+            throw new Error("SCT not available");
+        if (sct["Wallpaper"]) {
+            document.getElementById('desktop')!.style.backgroundImage = 'url(' + sct["Wallpaper"] + ')';
         }
-        if (sct.TaskbarSize) {
-            document.getElementById('taskbar').style.height = sct.TaskbarSize + 'px';
+        if (sct["TaskbarSize"]) {
+            document.getElementById('taskbar')!.style.height = sct["TaskbarSize"] + 'px';
         }
 
-        window.applyTheme = function(themeName) {
-            var themes = {
+        (window as any)["applyTheme"] = (themeName: string) => {
+            const themes: Record<string, { primary: string, light: string, dark: string, inactive: string }> = {
                 'Luna': { primary: '#0054e3', light: '#0058e6', dark: '#00309c', inactive: '#9db9eb' },
                 'Olive': { primary: '#738a5d', light: '#8ea375', dark: '#5a6b48', inactive: '#c5d0b9' },
                 'Silver': { primary: '#a0a0a0', light: '#b0b0b0', dark: '#808080', inactive: '#d0d0d0' }
             };
-            var t = themes[themeName] || themes['Luna'];
+            const t = themes[themeName] || themes['Luna'];
             document.documentElement.style.setProperty('--xp-blue', t.primary);
             document.documentElement.style.setProperty('--xp-blue-light', t.light);
             document.documentElement.style.setProperty('--xp-blue-dark', t.dark);
             document.documentElement.style.setProperty('--xp-inactive', t.inactive);
             
             // Update taskbar and start button colors too
-            document.getElementById('taskbar').style.background = 'linear-gradient(to bottom, ' + t.light + ' 0%, ' + t.primary + ' 100%)';
-            document.getElementById('start-button').style.background = 'linear-gradient(to bottom, #388e3c 0%, #4caf50 100%)'; // Keep start green
+            document.getElementById('taskbar')!.style.background = 'linear-gradient(to bottom, ' + t.light + ' 0%, ' + t.primary + ' 100%)';
+            document.getElementById('start-button')!.style.background = 'linear-gradient(to bottom, #388e3c 0%, #4caf50 100%)'; // Keep start green
         };
-        applyTheme(sct.Theme);
+        ((window as any)["applyTheme"] as Function)?.(sct["Theme"]);
 
-        window.restartExplorer = function() {
-            var sct = XP_API.getSCT();
-            if (sct.Wallpaper) {
-                document.getElementById('desktop').style.backgroundImage = 'url(' + sct.Wallpaper + ')';
+        (window as any)["restartExplorer"] = () => {
+            const sct = XP_API.getSCT<Record<string, unknown>>();
+            if (!sct)
+                throw new Error("SCT not available");
+            if (sct["Wallpaper"]) {
+                document.getElementById('desktop')!.style.backgroundImage = 'url(' + sct["Wallpaper"] + ')';
             }
-            if (sct.Theme) {
-                applyTheme(sct.Theme);
+            if (sct["Theme"]) {
+                (window as any)["applyTheme"]?.(sct["Theme"]);
             }
-            if (sct.TaskbarSize) {
-                document.getElementById('taskbar').style.height = sct.TaskbarSize + 'px';
+            if (sct["TaskbarSize"]) {
+                document.getElementById('taskbar')!.style.height = sct["TaskbarSize"] + 'px';
             }
             updateClock(); // This will respect ShowClock
-            renderDesktop();
+            (window as any)["renderDesktop"]?.(); // TODO: find method
             XP_API.updateTaskbar();
             XP_API.showDialog({ title: 'System', message: 'Explorer has been restarted.' });
         };
 
         // Clock update
         function updateClock() {
-            var showClock = XP_API.Registry.get('System/ShowClock');
-            var clockEl = document.getElementById('clock');
+            const showClock = XP_API.Registry.get<boolean>('System/ShowClock');
+            const clockEl = document.getElementById('clock')!;
             if (!showClock) {
                 clockEl.style.display = 'none';
                 return;
             }
             clockEl.style.display = 'block';
             
-            var now = new Date();
-            var hours = now.getHours();
-            var minutes = now.getMinutes();
-            var ampm = hours >= 12 ? 'PM' : 'AM';
+            const now = new Date();
+            let hours = now.getHours();
+            let minutes: number | string = now.getMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
             hours = hours % 12;
             hours = hours ? hours : 12;
             minutes = minutes < 10 ? '0' + minutes : minutes;
-            document.getElementById('clock').innerText = hours + ':' + minutes + ' ' + ampm;
+            document.getElementById('clock')!.innerText = hours + ':' + minutes + ' ' + ampm;
         }
         setInterval(updateClock, 1000);
         updateClock();
 
         // Disable default context menu globally
-        document.addEventListener('contextmenu', function(e) {
-            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        document.addEventListener('contextmenu', (e) => {
+            if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
                 e.preventDefault();
             }
         });
@@ -334,7 +377,7 @@ window.onload = function() {
         var startMenu = document.getElementById('start-menu');
         
         // Fix start menu position based on taskbar height
-        var updateStartMenuPos = function() {
+        var updateStartMenuPos = () => {
             var taskbar = document.getElementById('taskbar');
             var startMenu = document.getElementById('start-menu');
             if (taskbar && startMenu) {
@@ -344,49 +387,49 @@ window.onload = function() {
                 startMenu.style.bottom = h + 'px';
             }
         };
-        setTimeout(updateStartMenuPos, 50);
-        setTimeout(updateStartMenuPos, 500); // Second pass to be sure
+        //setTimeout(updateStartMenuPos, 50);
+        //setTimeout(updateStartMenuPos, 500); // Second pass to be sure
         window.addEventListener('resize', updateStartMenuPos);
 
-        startBtn.onclick = function(e) {
-            e.stopPropagation();
+        startBtn!.onclick = (ev) => {
+            ev.stopPropagation();
             updateStartMenuPos(); // Update before showing
-            startMenu.classList.toggle('open');
+            startMenu!.classList.toggle('open');
         };
 
-        document.onclick = function() {
-            startMenu.classList.remove('open');
+        document.onclick = () => {
+            startMenu!.classList.remove('open');
         };
 
-        startMenu.onclick = function(e) {
-            e.stopPropagation();
+        startMenu!.onclick = (ev) => {
+            ev.stopPropagation();
         };
 
         // Desktop Icons (Dynamic from VFS)
-        window.renderDesktop = function() {
+        (window as any)["renderDesktop"] = () => {
             XP_API.exec('explorer', { mode: 'desktop' });
         };
-        renderDesktop();
+        (window as any)["renderDesktop"]();
 
         // Desktop Context Menu
-        document.getElementById('desktop').oncontextmenu = function(e) {
-            e.preventDefault();
-            XP_API.showContextMenu(e.clientX, e.clientY, [
+        document.getElementById('desktop')!.oncontextmenu = (ev) => {
+            ev.preventDefault();
+            XP_API.showContextMenu(ev.clientX, ev.clientY, [
                 { text: 'Arrange Icons By', menu: [
                     { text: 'Name' },
                     { text: 'Size' },
                     { text: 'Type' },
                     { text: 'Modified' }
                 ]},
-                { text: 'Refresh', action: function() { renderDesktop(); } },
+                { text: 'Refresh', action: function() { (window as any)["renderDesktop"](); } },
                 { separator: true },
                 { text: 'Paste', action: function() { XP_API.showDialog({ message: 'Nothing to paste.' }); } },
                 { text: 'Paste Shortcut' },
                 { separator: true },
                 { text: 'New', menu: [
-                    { text: 'Folder', action: function() { VFS.mkdir('C:/Desktop/New Folder'); renderDesktop(); } },
+                    { text: 'Folder', action: function() { VFS.mkdir('C:/Desktop/New Folder');(window as any)["renderDesktop"](); } },
                     { text: 'Shortcut' },
-                    { text: 'Text Document', action: function() { VFS.writeFile('C:/Desktop/New Text Document.txt', ''); renderDesktop(); } }
+                    { text: 'Text Document', action: function() { VFS.writeFile('C:/Desktop/New Text Document.txt', ''); (window as any)["renderDesktop"](); } }
                 ]},
                 { separator: true },
                 { text: 'Properties', action: function() { XP_API.exec('displayProperties'); } }
@@ -410,11 +453,11 @@ window.onload = function() {
         }, 2000);
 
         // Start Menu Header
-        var startHeader = document.getElementById('start-header');
+        const startHeader = document.getElementById('start-header')!;
         startHeader.innerHTML = '<img src="' + currentUser.avatar + '" referrerPolicy="no-referrer"><span>' + currentUser.username + '</span>';
 
         // Start Menu Items (from C:/StartMenu)
-        var startLeft = document.getElementById('start-left');
+        const startLeft = document.getElementById('start-left')!;
         startLeft.innerHTML = '';
         var startMenuItems = VFS.ls('C:/StartMenu');
         startMenuItems.forEach(function(item) {
@@ -423,20 +466,21 @@ window.onload = function() {
             var iconUrl = XP_API.getIcon(path);
             
             var div = XP_API.createElement({
+                tag: "div",
                 className: 'start-item',
                 innerHTML: '<img src="' + iconUrl + '" referrerPolicy="no-referrer"><span>' + item.replace('.lnk', '') + '</span>',
-                onclick: function() {
+                onClick: () => {
                     XP_API.exec(path);
-                    startMenu.classList.remove('open');
+                    startMenu!.classList.remove('open');
                 }
             });
             startLeft.appendChild(div);
         });
 
         // Right side items
-        var startRight = document.getElementById('start-right');
+        const startRight = document.getElementById('start-right')!;
         startRight.innerHTML = '';
-        var rightItems = [
+        const rightItems = [
             { name: 'My Documents', action: function() { XP_API.exec('explorer', ['C:/Documents']); } },
             { name: 'My Pictures', action: function() { XP_API.showDialog({ message: 'My Pictures is empty.' }); } },
             { name: 'My Music', action: function() { XP_API.showDialog({ message: 'My Music is empty.' }); } },
@@ -445,35 +489,37 @@ window.onload = function() {
             { name: 'Control Panel', action: function() { XP_API.exec('control'); } }
         ];
 
-        rightItems.forEach(function(item) {
+        rightItems.forEach((item) => {
             if (item.separator) {
                 startRight.appendChild(XP_API.createElement({ tag: 'hr' }));
                 return;
             }
             var div = XP_API.createElement({
+                tag: "div",
                 className: 'start-item',
                 innerText: item.name,
-                onclick: function() {
-                    item.action();
-                    startMenu.classList.remove('open');
+                onClick: function() {
+                    item.action?.();
+                    startMenu!.classList.remove('open');
                 }
             });
             startRight.appendChild(div);
         });
 
         var runItem = XP_API.createElement({
+            tag: "div",
             className: 'start-item',
             innerHTML: '<img src="https://img.icons8.com/color/48/000000/run-command.png" style="width:24px;height:24px;" referrerPolicy="no-referrer"><span>Run...</span>',
-            onclick: function() {
-                startMenu.classList.remove('open');
+            onClick: () => {
+                startMenu!.classList.remove('open');
                 XP_API.showDialog({
                     type: 'prompt',
                     title: 'Run',
                     message: 'Type the name of a program, folder, document, or Internet resource, and Windows will open it for you.',
-                    onOk: function(cmd) {
+                    onOk: (cmd) => {
                         if (cmd) {
-                            if (cmd.indexOf('C:/') === 0) {
-                                XP_API.exec(cmd);
+                            if ((cmd as string).indexOf('C:/') === 0) {
+                                XP_API.exec(cmd as string);
                             } else {
                                 XP_API.exec('C:/Apps/' + cmd + '.js');
                             }
@@ -486,15 +532,15 @@ window.onload = function() {
         startRight.appendChild(runItem);
 
         // Footer buttons
-        var footerBtns = document.querySelectorAll('#start-footer .footer-btn');
-        footerBtns[0].onclick = function() { 
+        var footerBtns = document.querySelectorAll('#start-footer .footer-btn') as NodeListOf<HTMLElement>;
+        footerBtns[0].onclick = () => { 
             XP_API.showDialog({ 
                 type: 'confirm', 
                 message: 'Are you sure you want to log off?', 
                 onOk: function() { XP_API.Auth.logout(); } 
             }); 
         };
-        footerBtns[1].onclick = function() { 
+        footerBtns[1].onclick = () => {
             XP_API.showDialog({ 
                 type: 'confirm', 
                 message: 'Turn off computer?', 
@@ -503,6 +549,9 @@ window.onload = function() {
         };
 
         console.log('XP Retro Desktop Initialized for ' + currentUser.username);
+
+        initGlobalErrorHandler(XP_API);
+        console.log("Global ERR handler initialized...");
     }
 
     initDesktop();

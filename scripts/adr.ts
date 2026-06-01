@@ -1,7 +1,12 @@
+import { XP_API } from "./api";
+import { FCCF } from "./compfwk";
+import { VFS } from "./vfs";
+
 /* Application Dearchival Runtime (ADR) - ES6 */
-const ADR = (() => {
-    const LambdaApps = {
-        'about': (args, FCCF, XP_API, VFS) => {
+
+export const ADR = (() => {
+    const LambdaApps: Record<string, (args: string[], FCCF: any, XP_API: any, VFS: any) => void> = {
+        "about": (args: string[], FCCF: any, XP_API: any, VFS: any) => {
             const content = FCCF.Controls.Pane({
                 style: { padding: '20px', textAlign: 'center' },
                 children: [
@@ -11,9 +16,9 @@ const ADR = (() => {
                     FCCF.Controls.Pane({ style: { marginTop: '20px' }, children: [document.createTextNode('Copyright © 1985-2001 Microsoft Corporation')] })
                 ]
             });
-            FCCF.Window({ title: 'About Windows', width: 400, height: 300, content });
+            FCCF.Window({ title: "About Windows", width: 400, height: 300, content });
         },
-        'shutdown': (args, FCCF, XP_API, VFS) => {
+        "shutdown": (args: string[], FCCF: any, XP_API: any, VFS: any) => {
             XP_API.showDialog({
                 type: 'confirm',
                 title: 'Turn Off Computer',
@@ -25,30 +30,30 @@ const ADR = (() => {
         }
     };
 
-    const execute = (scriptText, path, args) => {
+    const execute = (script: string | Function, path: string, args: unknown) => {
         try {
             // Check if it's a function (Lambda App)
-            if (typeof scriptText === 'function') {
-                scriptText(args || {}, FCCF, XP_API, VFS);
+            if (typeof script === "function") {
+                script(args || {}, FCCF, XP_API, VFS);
                 return;
             }
 
             // FCCF is expected to be global. 
             // We wrap the script in a function and pass dependencies.
-            const fn = new Function('args', 'FCCF', 'XP_API', 'VFS', scriptText);
-            fn(args || {}, FCCF, XP_API, VFS);
+            const fn = new Function("args", "FCCF", "XP_API", "VFS", "close", script);
+            fn(args || [], FCCF, XP_API, VFS, () => {throw new Error("CLOSE"); });
         } catch (e) {
             XP_API.showDialog({ 
-                title: 'ADR Runtime Error', 
-                message: `Failed to execute ${path}: ${e.message}`, 
-                type: 'error' 
+                title: "ADR Runtime Error", 
+                message: `Failed to execute ${path}: ${(e as Error)?.message || "<not Error>"}`, 
+                type: "error"
             });
-            console.error('ADR Error:', e);
+            console.error("ADR Error:", e);
         }
     };
 
     return {
-        load: async (path, args) => {
+        load: async (path: string, args?: unknown) => {
             // Check Lambda Apps first
             if (LambdaApps[path]) {
                 execute(LambdaApps[path], path, args);
@@ -56,8 +61,9 @@ const ADR = (() => {
             }
 
             // Normalize path
+            // TODO: improve with PATH env var or similar.
             let fullPath = path;
-            if (!path.includes('/') && !path.includes('.')) {
+            if (!path.includes("/") && !path.includes(".")) {
                 fullPath = `C:/Apps/${path}.js`;
             }
 
@@ -65,21 +71,22 @@ const ADR = (() => {
             
             if (!scriptText) {
                 // Try to fetch from server if not in VFS
-                const serverUrl = path.includes('/') ? path : `/apps/${path}.js`;
+                const serverUrl = path.includes("/") ? path : `/apps/${path}.js`;
                 try {
                     const res = await fetch(serverUrl);
-                    if (!res.ok) throw new Error('App not found on server');
+                    if (!res.ok)
+                        throw new Error("App not found on server");
                     scriptText = await res.text();
                     
                     // Cache in VFS for performance if it's a system app
-                    if (!path.includes('/')) {
+                    if (!path.includes("/")) {
                         VFS.writeFile(fullPath, scriptText);
                     }
-                } catch (err) {
+                } catch (e) {
                     XP_API.showDialog({ 
-                        title: 'ADR Error', 
-                        message: `Could not load application: ${err.message}`, 
-                        type: 'error' 
+                        title: "ADR Error", 
+                        message: `Could not load application ${path}: ${(e as Error)?.message || "<not Error>"}`, 
+                        type: "error"
                     });
                     return;
                 }

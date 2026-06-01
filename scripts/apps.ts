@@ -1,8 +1,10 @@
+import { ADR } from "./adr";
+
 /* XP Applications (ES6) - FCCF Proxy */
-const XP_Apps = (() => {
+export const XP_Apps = (() => {
     return {
-        notepad: (filePath) => ADR.load('notepad', { filePath }),
-        explorer: (initialPath) => ADR.load('explorer', { initialPath }),
+        notepad: (filePath: string) => ADR.load('notepad', { filePath }),
+        explorer: (initialPath: string) => ADR.load('explorer', { initialPath }),
         cmd: () => ADR.load('cmd'),
         control: () => ADR.load('control'),
         regedit: () => ADR.load('regedit'),

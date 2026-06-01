@@ -12,3 +12,7 @@ async function preloadApps() {
         // For now, we'll let ADR handle it on-demand to save initial boot time.
     }
 }
+
+export {
+    preloadApps,
+};
