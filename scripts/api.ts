@@ -485,7 +485,7 @@ export const XP_API = (function() {
         addTrayIcon: (options: {
             icon: string;
             title: string;
-            onclick?: (this: GlobalEventHandlers, ev: PointerEvent) => void;
+            onclick?: () => void;
         }) => {
             const tray = document.getElementById("system-tray");
             if (!tray)
@@ -503,7 +503,7 @@ export const XP_API = (function() {
             icon.style.cursor = 'pointer';
             icon.referrerPolicy = 'no-referrer';
             if (options.onclick)
-                icon.onclick = options.onclick;
+                icon.onclick = () => options.onclick;
             
             // Fix: Ensure we insert before the clock safely
             if (clock && clock.parentNode === tray) {

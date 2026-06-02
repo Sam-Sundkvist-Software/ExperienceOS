@@ -11,7 +11,7 @@ export interface CreateElementOptions<T extends keyof HTMLElementTagNameMap> {
     innerText?: string;
     tooltip?: string;
     contextMenu?: MenuItem[];
-    onClick?: (this: GlobalEventHandlers, ev: PointerEvent) => void;
+    onClick?: () => void;
     onPointerDown?: (this: GlobalEventHandlers, ev: PointerEvent) => void;
 }
 
@@ -73,7 +73,7 @@ export function createElement<T extends keyof HTMLElementTagNameMap>(options: Cr
     }
 
     if (options.onClick)
-        el.onclick = options.onClick;
+        el.onclick = () => options.onClick;
     if (options.onPointerDown)
         el.onpointerdown = options.onPointerDown;
 
@@ -222,7 +222,7 @@ export const FCCF = (() => {
                             li.appendChild(item);
                         }
                         if (options.onItemClick)
-                            li.onclick = () => options.onItemClick?.(typeof item === "string" ? item : item.textContent);
+                            li.onclick = () => options.onItemClick?.(typeof item === "string" ? item! : item.textContent!);
                         ul.appendChild(li);
                     });
                 };
