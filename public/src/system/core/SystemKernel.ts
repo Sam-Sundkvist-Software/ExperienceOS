@@ -30,9 +30,18 @@ export default class SystemKernel {
 					return (h >>> 0).toString(16);
 				},
 				Auth: {
-
+					login(username, password) {
+						
+					},
 				},
 			};
 		})();
+	}
+
+	loginUser(o: {
+		username: string;
+		password: string;
+	}): boolean {
+		
 	}
 }
