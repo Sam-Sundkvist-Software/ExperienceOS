@@ -73,7 +73,7 @@ export function createElement<T extends keyof HTMLElementTagNameMap>(options: Cr
     }
 
     if (options.onClick)
-        el.onclick = () => options.onClick;
+        el.onclick = () => options.onClick?.();
     if (options.onPointerDown)
         el.onpointerdown = options.onPointerDown;
 

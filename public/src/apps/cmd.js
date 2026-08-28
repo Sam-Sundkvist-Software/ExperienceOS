@@ -1,5 +1,5 @@
 /* Command Prompt - FCCF Version */
-const [getOutput, setOutput, subscribeOutput] = FCCF.useState(['Microsoft Windows XP [Version 5.1.2600]', '(C) Copyright 1985-2001 Microsoft Corp.', '']);
+const [getOutput, setOutput, subscribeOutput] = FCCF.useState(['Samsoft ExperienceOS [Version 5.1.2600]', '(C) Copyright 2026 Samsoft Inc.', '']);
 const [getHistory, setHistory] = FCCF.useState([]);
 
 const outputPane = FCCF.Controls.Pane({
@@ -64,7 +64,7 @@ input.onkeydown = (e) => {
             const items = VFS.ls('C:');
             setOutput([...newLines, ...items, '']);
         } else if (cmd === 'ver') {
-            setOutput([...newLines, 'Microsoft Windows XP [Version 5.1.2600]', '']);
+            setOutput([...newLines, 'Samsoft ExperienceOS [Version 5.1.2600]', '']);
         } else if (cmd === 'help') {
             setOutput([...newLines, 'Available commands: cls, dir, ver, help, exit', '']);
         } else if (cmd === 'exit') {

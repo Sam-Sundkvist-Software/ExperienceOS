@@ -140,6 +140,8 @@ export const HLFileSystem = (): IFileSystem => {
         readFile(path: string) {
             //return string when file read successfully and
             // undefined when file not found or read failed
+
+            return undefined;
         },
 
         writeFile(path: string, text: string) {

@@ -11,7 +11,7 @@ export const ADR = (() => {
                 style: { padding: '20px', textAlign: 'center' },
                 children: [
                     FCCF.Controls.Icon({ src: 'https://img.icons8.com/color/48/000000/windows-xp.png', size: '64px' }),
-                    FCCF.Controls.Pane({ style: { fontSize: '18px', fontWeight: 'bold', margin: '10px 0' }, children: [document.createTextNode('Windows XP Retro')] }),
+                    FCCF.Controls.Pane({ style: { fontSize: '18px', fontWeight: 'bold', margin: '10px 0' }, children: [document.createTextNode('ExperienceOS')] }),
                     FCCF.Controls.Pane({ children: [document.createTextNode('Version 5.1 (Build 2600.xpsp_sp3_gdr.130327-1507 : Service Pack 3)')] }),
                     FCCF.Controls.Pane({ style: { marginTop: '20px' }, children: [document.createTextNode('Copyright © 1985-2001 Microsoft Corporation')] })
                 ]

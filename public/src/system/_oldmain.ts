@@ -440,7 +440,7 @@ window.onload = function() {
         var avIcon = XP_API.addTrayIcon({
             title: 'CentralFirm Antivirus',
             icon: 'https://img.icons8.com/color/48/000000/shield.png',
-            onclick: function() {
+            onClick: function() {
                 XP_API.exec('antivirus');
             }
         });

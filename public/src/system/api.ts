@@ -3,6 +3,7 @@ import { createElement, CreateElementOptions, MenuItem, showContextMenu } from "
 import WindowManager, { Window, WindowOptions } from "./window-manager";
 import { ADR } from "./adr";
 import { FCCF } from "./compfwk";
+import ISystemAPI from "./core/ISystemAPI";
 
 /* Desktop & Window API (ES5) */
 export type XpUserPrivilege = "admin" | "user" | "guest";
@@ -12,18 +13,62 @@ export interface XpUser {
     privilege: XpUserPrivilege;
     avatar?: string;
 }
-interface BalloonTipOptions {
+export interface BalloonTipOptions {
     title?: string;
     message: string;
     timeout?: number;
 }
-interface TooltipOptions {
+export interface TooltipOptions {
     text: string;
     icon?: string;
     enabled?: boolean;
 }
+export interface ITrayIconOptions {
+	icon: string;
+	title: string;
+	tooltip?: TooltipOptions;
+	onClick?: () => void;
+}
+export interface IDialogOptions {
+	icon?: string;
+	message?: string;
+	type?: "prompt" | "error" | "confirm" | "warning";
+	defaultValue?: string;
+	multiSelect?: string[];
+	items?: (string | HTMLElement)[];
+	dropdown?: string[];
+	onDropdownChange?: (value: string) => void;
+	showProgress?: boolean;
+	progress?: number;
+	setProgress?: (progress: number) => void;
+	controls?: Node[];
+	okText?: string;
+	onOk?: (result: string | boolean) => void;
+	showCancel?: boolean;
+	cancelText?: string;
+	onCancel?: () => void;
+	title?: string;
+	width?: number;
+	height?: number;
+	modal?: boolean;
+	topmodal?: boolean;
+	parent?: Window;
+	resizable?: boolean;
+}
+export interface IInstallerOptions {
+	steps: {
+		title?: string;
+		content?: string | Function | Node;
+	}[];
+	onFinish?: () => void;
+	onCancel?: () => void;
+	title?: string;
+	width?: number;
+	height?: number;
+	modal?: boolean;
+}
 
-export const XP_API = (function() {
+export const XP_API: ISystemAPI = (function() {
     const trayIcons = [];
     const wm = new WindowManager();
     let currentUser: XpUser | null = null;
@@ -482,11 +527,7 @@ export const XP_API = (function() {
         updateTaskbar: () => {
             wm.updateTaskbar();
         },
-        addTrayIcon: (options: {
-            icon: string;
-            title: string;
-            onclick?: () => void;
-        }) => {
+        addTrayIcon (options: ITrayIconOptions) {
             const tray = document.getElementById("system-tray");
             if (!tray)
                 throw new Error("System tray not found");
@@ -500,10 +541,11 @@ export const XP_API = (function() {
             icon.style.width = '16px';
             icon.style.height = '16px';
             icon.style.marginRight = '5px';
-            icon.style.cursor = 'pointer';
             icon.referrerPolicy = 'no-referrer';
-            if (options.onclick)
-                icon.onclick = () => options.onclick;
+            if (options.tooltip)
+                this.showTooltip(icon, options.tooltip);
+            if (options.onClick)
+                icon.onclick = () => options.onClick?.();
             
             // Fix: Ensure we insert before the clock safely
             if (clock && clock.parentNode === tray) {
@@ -583,8 +625,22 @@ export const XP_API = (function() {
                     tooltip.appendChild(text);
                     document.body.appendChild(tooltip);
                 }
-                tooltip.style.left = (ev.clientX + 10) + 'px';
-                tooltip.style.top = (ev.clientY + 10) + 'px';
+
+                let left = (ev.clientX + 10);
+                let top = (ev.clientY + 10);
+
+                const clipRight = window.innerWidth - left - tooltip.offsetWidth < 0;
+                const clipBottom = window.innerHeight - top - tooltip.offsetHeight < 0;
+
+                if (clipRight) {
+                    left -= 14 + tooltip.offsetWidth;
+                }
+                if (clipBottom) {
+                    top -= 14 + tooltip.offsetHeight;
+                }
+
+                tooltip.style.left = left + "px";
+                tooltip.style.top = top + "px";
             }
             
             target.addEventListener("pointerenter", removeTooltip);
@@ -594,32 +650,7 @@ export const XP_API = (function() {
             document.addEventListener("pointerdown", removeTooltip);
         },
 
-        showDialog: (options: {
-            icon?: string;
-            message?: string;
-            type?: "prompt" | "error" | "confirm" | "warning";
-            defaultValue?: string;
-            multiSelect?: string[];
-            items?: (string | HTMLElement)[];
-            dropdown?: string[];
-            onDropdownChange?: (value: string) => void;
-            showProgress?: boolean;
-            progress?: number;
-            setProgress?: (progress: number) => void;
-            controls?: Node[];
-            okText?: string;
-            onOk?: (result: string | boolean) => void;
-            showCancel?: boolean;
-            cancelText?: string;
-            onCancel?: () => void;
-            title?: string;
-            width?: number;
-            height?: number;
-            modal?: boolean;
-            topmodal?: boolean;
-            parent?: Window;
-            resizable?: boolean;
-        }) => {
+        showDialog: (options: IDialogOptions) => {
             const container = document.createElement('div');
             container.style.padding = '15px';
             container.style.display = 'flex';
@@ -750,18 +781,7 @@ export const XP_API = (function() {
         showContextMenu: (x: number, y: number, items: MenuItem[]) => {
             showContextMenu(x, y, items);
         },
-        showInstaller: (options: {
-            steps: {
-                title?: string;
-                content?: string | Function | Node;
-            }[];
-            onFinish?: () => void;
-            onCancel?: () => void;
-            title?: string;
-            width?: number;
-            height?: number;
-            modal?: boolean;
-        }) => {
+        showInstaller: (options: IInstallerOptions) => {
             let winId: string;
             const installer = FCCF.Controls.Installer({
                 steps: options.steps,
