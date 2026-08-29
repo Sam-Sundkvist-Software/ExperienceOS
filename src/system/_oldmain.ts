@@ -98,7 +98,7 @@ window.onload = function() {
 
         var left = document.createElement('div');
         left.style.textAlign = 'right';
-        left.innerHTML = '<div style="font-size:36px;color:white;font-weight:bold;">Windows <span style="color:#ff9900;">XP</span></div>' +
+        left.innerHTML = '<div style="font-size:36px;color:white;font-weight:bold;">Experience<span style="color:#ff9900;">OS</span></div>' +
                          '<div style="color:white;font-size:14px;opacity:0.8;">To begin, click your user name</div>';
         middle.appendChild(left);
 
@@ -515,7 +515,7 @@ window.onload = function() {
                 XP_API.showDialog({
                     type: 'prompt',
                     title: 'Run',
-                    message: 'Type the name of a program, folder, document, or Internet resource, and Windows will open it for you.',
+                    message: 'Type the name of a program, folder, document, or Internet resource, and ExperienceOS will open it for you.',
                     onOk: (cmd) => {
                         if (cmd) {
                             if ((cmd as string).indexOf('C:/') === 0) {

@@ -138,6 +138,7 @@ export default class Registry implements IRegistry {
 export class RegistryError extends Error {
 	public constructor(message?: string, errorOptions?: ErrorOptions) {
 		super(message, errorOptions);
+		this.name = "RegistryError";
 	}
 }
 

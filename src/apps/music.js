@@ -52,7 +52,7 @@ const mainPane = FCCF.Controls.Pane({
 });
 
 const winId = FCCF.Window({
-    title: 'Windows Media Player',
+    title: 'Experience Media Player',
     width: 350,
     height: 400,
     content: mainPane

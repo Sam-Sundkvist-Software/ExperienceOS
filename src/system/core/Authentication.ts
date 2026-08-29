@@ -5,7 +5,7 @@ export const DEFAULT_USERS_REGKEY = "System/Users";
 /**
  * The primary authentication subsystem for ExperienceOS.
  */
-export default class Authent implements IAuthentication {
+export default class Authentication implements IAuthentication {
 	private _registry: IRegistry;
 	private _usersRegKey: string;
 	private _activeUser: IUserData | null;
@@ -72,6 +72,7 @@ export default class Authent implements IAuthentication {
 export class AuthenticationError extends Error {
 	public constructor(message?: string, options?: ErrorOptions) {
 		super(message, options);
+		this.name = "AuthenticationError";
 	}
 }
 
