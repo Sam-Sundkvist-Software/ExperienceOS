@@ -2,6 +2,8 @@ import { defineConfig } from "vite";
 import { resolve } from "node:path";
 import { glob } from "glob";
 
+const __dirname = import.meta.dirname;
+
 const root = resolve(__dirname, "src");
 const appsDir = resolve(root, "apps");
 

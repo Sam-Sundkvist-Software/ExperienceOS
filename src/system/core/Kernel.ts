@@ -81,6 +81,7 @@ export default class Kernel implements IKernel {
 						},
 						writeFile(path, content) {
 							self._fs.writeFile(path, content);
+							return undefined;
 						},
 						delete(path) {
 							// TODO: Add the bare minimum to FS API
@@ -130,6 +131,7 @@ export default class Kernel implements IKernel {
 					},
 					setIconCache(data) {
 						void data;
+						return undefined;
 					},
 					getIcon(path) {
 						void path;
