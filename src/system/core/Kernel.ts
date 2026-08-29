@@ -1,6 +1,6 @@
 import { XpUser, XpUserPrivilege } from "../api";
 import { CreateElementOptions } from "../compfwk";
-import { Window } from "../window-manager";
+import Window from "./wm/Window";
 import Authentication, { IAuthentication } from "./Authentication";
 import FileSystem, { IFileSystem } from "./FileSystem";
 import ISystemAPI from "./ISystemAPI";

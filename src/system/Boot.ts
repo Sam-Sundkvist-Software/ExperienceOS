@@ -1,5 +1,5 @@
 import { XP_API, XpUser } from "./api";
-import { showLogonScreen } from "./window-manager";
+import { showLogonScreen } from "./core/wm/WindowManager";
 
 /**
  * The subsystem responsible of managing

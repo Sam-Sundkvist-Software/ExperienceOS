@@ -1,6 +1,7 @@
 import { FSFileNode, VFS } from "./vfs";
 import { createElement, CreateElementOptions, MenuItem, showContextMenu } from "./compfwk";
-import WindowManager, { Window, WindowOptions } from "./window-manager";
+import WindowManager from "./core/wm/WindowManager"
+import Window, { WindowOptions } from "./core/wm/Window";
 import { ADR } from "./adr";
 import { FCCF } from "./compfwk";
 import ISystemAPI from "./core/ISystemAPI";

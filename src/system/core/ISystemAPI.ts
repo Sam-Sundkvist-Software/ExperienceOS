@@ -1,6 +1,6 @@
 import { BalloonTipOptions, IDialogOptions, IInstallerOptions, ITrayIconOptions, TooltipOptions, XpUser, XpUserPrivilege } from "../api";
 import { CreateElementOptions, MenuItem } from "../compfwk";
-import { Window, WindowOptions } from "../window-manager";
+import Window, { WindowOptions } from "./wm/Window";
 
 export default interface ISystemAPI {
 	hash(str: string): string;
