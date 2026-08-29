@@ -1,195 +1,334 @@
-/**
- * The API interface for a file system supported by ExperienceOS.
- */
-export interface IFileSystem {
-    traverse(path: string, cwd?: string): FileSystemNode | undefined;
+export const DEFAULT_COMPACTION_THRESHOLD = 100;
 
-    readFile(path: string): string | undefined;
-    writeFile(path: string, text: string): boolean;
+/**
+ * The primary ExperienceOS file system,
+ * aka. the expFS.
+ */
+export default class FileSystem implements IFileSystem {
+	private _compactFreelistThreshold: number;
+	private _nodeStore: INodeStore;
+	private _root: IDirectoryNode | null;
+
+	public constructor() {
+		this._compactFreelistThreshold = DEFAULT_COMPACTION_THRESHOLD;
+		this._nodeStore = {
+			nodes: {},
+			counter: 0,
+			free: [],
+			freeHead: 0,
+		};
+		this._root = this.allocateNode({
+			type: "dir",
+			id: 0,
+			name: "",
+			parentId: -1,
+			children: {},
+		} as IDirectoryNode);
+	}
+
+	public traverse(path: string, cwd?: string): IFileSystemNode | null {
+		const parts = path.split("/");
+		let current = cwd ? this.traverse(cwd) : this._root;
+
+		if (!current || current.type !== "dir") {
+			return null;
+		}
+
+		for (const part of parts) {
+			if (!current) {
+				return null;
+			}
+
+			if (part === "" || part === ".") {
+				continue;
+			} else if (part === "..") {
+				current = this._nodeStore.nodes[current?.parentId];
+			} else {
+				current = this._nodeStore.nodes[(current as IDirectoryNode).children[part]];
+			}
+		}
+
+		return current;
+	}
+
+	public stat(path: string): IFileSystemNodeStatistics | null {
+		const node = this.traverse(path);
+
+		if (!node) {
+			return null;
+		}
+
+		return {
+			type: node.type,
+		};
+	}
+
+	public readFile(path: string): string {
+		const file = this.traverse(path);
+
+		if (!file || file.type !== "file") {
+			throw new FileSystemError("The specified path did not point to a valid file.");
+		}
+
+		return (file as IFileNode).content;
+	}
+
+	public writeFile(path: string, text: string): void {
+		const nodes = this.getNodesAlong(path);
+		const node = nodes[nodes.length - 1];
+
+		if (!node) {
+			throw new FileSystemError("Invalid path");
+		}
+
+		if (node.type === "dir") {
+
+		}
+	}
+
+	public createDirectory(path: string, recurse: boolean): void {
+		// TODO: implement 'recurse'
+
+		const nodes = this.getNodesAlong(path);
+		const node = nodes[nodes.length - 1];
+
+		if (!node) {
+			throw new FileSystemError("Invalid path");
+		}
+
+		if (node.type !== "dir")
+			throw new FileSystemError("Target parent directory is invalid");
+
+		const newNode = this.allocateNode({
+			type: "dir",
+			id: -1,
+			parentId: node.id,
+			children: {},
+		} as IDirectoryNode);
+
+		this.allocateNode(newNode);
+	}
+
+	private getParentNodeOf(path: string): IFileSystemNode {
+		// TODO: implement
+		/*
+		 * example:
+		 * 
+		 * a/b/c/d
+		 * Return c's node.
+		 * 
+		 */
+		throw new FileSystemError("NOT_IMPLEMENTED");
+	}
+
+	private getNodesAlong(path: string): IFileSystemNode[] {
+		const parts = path.split("/");
+		const nodes: IFileSystemNode[] = [];
+
+		if (!this._root)
+			throw new FileSystemError("Cannot access root!");
+
+		let current: IFileSystemNode = this._root;
+
+		for (const part of parts) {
+			if (!current) {
+				return nodes;
+			}
+
+			let node: IFileSystemNode;
+			if (part === "" || part === ".") {
+				continue;
+			} else if (part === "..") {
+				node = this._nodeStore.nodes[current?.parentId];
+			} else {
+				node = this._nodeStore.nodes[(current as IDirectoryNode).children[part]];
+			}
+
+			nodes.push(node);
+			current = node;
+		}
+
+		return nodes;
+	}
+
+	private allocateNode<T extends IFileSystemNode>(node: T): T {
+		if (this._nodeStore.freeHead < this._nodeStore.free.length) {
+			const index = this._nodeStore.free[this._nodeStore.freeHead++];
+
+			this._nodeStore.nodes[index] = node;
+			node.id = index;
+
+			if (this._nodeStore.freeHead === this._nodeStore.free.length) {
+				this._nodeStore.free = [];
+				this._nodeStore.freeHead = 0;
+			}
+
+			if (this._nodeStore.freeHead > this._compactFreelistThreshold) {
+				this._nodeStore.free = this._nodeStore.free.slice(this._nodeStore.freeHead);
+				this._nodeStore.freeHead = 0;
+			}
+
+			return node;
+		}
+
+		const index = this._nodeStore.counter++;
+		this._nodeStore.nodes[index] = node;
+		node.id = index;
+
+		return node;
+	}
+
+	private freeNode<T extends IFileSystemNode>(node: T): boolean {
+		if (this._nodeStore.nodes[node.id] !== node) {
+			return false;
+		}
+
+		if (node.id === this._nodeStore.counter - 1) {
+			return delete this._nodeStore.nodes[--this._nodeStore.counter];
+		}
+
+		if (!delete this._nodeStore.nodes[node.id])
+			return false;
+
+		this._nodeStore.free.push(node.id);
+
+		return true;
+	}
+
+	private assignNodeMetadata(
+		node: IFileSystemNode,
+		owner?: string,
+		userPerm?: AccessString,
+		groupPerm?: AccessString,
+		othersPerm?: AccessString
+	): void {
+		const user: AccessString = userPerm ||
+			(node.type === "dir" ? "rwx" :
+			node.type === "file" ? "rw-" : "rw-");
+		const group: AccessString = groupPerm ||
+			(node.type === "dir" ? "r-x" :
+			node.type === "file" ? "r--" : "r--");
+		const others: AccessString = othersPerm ||
+			(node.type === "dir" ? "r-x" :
+			node.type === "file" ? "r--" : "r--");
+
+		const now = Date.now();
+
+		node.meta = {
+			created: now,
+			modified: now,
+			owner: owner || "",
+			permissions: {
+				user,
+				group,
+				others,
+			},
+		};
+	}
 }
 
+export class FileSystemError extends Error {
+	public constructor(message?: string, options?: ErrorOptions) {
+		super(message, options);
+	}
+}
+
+export interface IFileSystem {
+	/**
+	 * Attempts to resolve the specified path to a file system node.
+	 * @returns The resolved node, or `null` if no valid node was found.
+	 */
+	traverse(path: string, cwd?: string): IFileSystemNode | null;
+
+	/**
+	 * Gets statistics of a file system node.
+	 * @returns Node statistics, or if the path does not point to a valid node, `null` is returned instead.
+	 */
+	stat(path: string): IFileSystemNodeStatistics | null;
+
+	/**
+	 * Reads the contents of a valid file and returns them as a string.
+	 * @throws If the file is inaccessible or does not exist.
+	 */
+	readFile(path: string): string;
+
+	/**
+	 * Creates or overwrites a file with the specified string contents.
+	 * @throws If one or more of the directories in the path do not exist.
+	 */
+	writeFile(path: string, text: string): void;
+
+	/**
+	 * Creates a directory, or does nothing if the directory already exists.
+	 * @param recurse Creates all directories along a path to be able to create the deepest directory.
+	 * @throws If the directory cannot be created.
+	 */
+	createDirectory(path: string, recurse: boolean): void;
+}
+
+export interface IMountable {
+	/**
+	 * The primary unique integer identifier.
+	 */
+	id: number;
+
+	/**
+	 * The drive root identifier, which comes before
+	 * `:/...`, for example "C" for "C:/...".
+	 */
+	rootId: string;
+}
+
+export interface IFileSystemNodeStatistics {
+	type: FileSystemNodeType;
+	// Extend if necessary.
+}
+
+export type FileSystemNodeType = "file" | "dir" | "link";
+
 /**
+ * @deprecated
  * The IntelliSoft Web "HotLoad" FileSystem,
  * compatible with ExperienceOS.
  */
-export const HLFileSystem = (): IFileSystem => {
-    const compactFreelistThreshold = 100;
-    const nodeStore: NodeStore = {
-        nodes: {},
-        counter: 0,
-        free: [],
-        freeHead: 0,
-    };
+export const HLFileSystem = null;
 
-    let root: DirectoryNode | null = null;
-
-    const helpers = {
-        allocateNode: <T extends FileSystemNode>(node: T) => {
-            if (nodeStore.freeHead < nodeStore.free.length) {
-                const index = nodeStore.free[nodeStore.freeHead++];
-
-                nodeStore.nodes[index] = node;
-                node.id = index;
-
-                if (nodeStore.freeHead === nodeStore.free.length) {
-                    nodeStore.free = [];
-                    nodeStore.freeHead = 0;
-                }
-
-                if (nodeStore.freeHead > compactFreelistThreshold) {
-                    nodeStore.free = nodeStore.free.slice(nodeStore.freeHead);
-                    nodeStore.freeHead = 0;
-                }
-
-                return node;
-            }
-
-            const index = nodeStore.counter++;
-            nodeStore.nodes[index] = node;
-            node.id = index;
-
-            return node;
-        },
-        freeNode: <T extends FileSystemNode>(node: T) => {
-            if (nodeStore.nodes[node.id] !== node) {
-                return false;
-            }
-
-            if (node.id === nodeStore.counter - 1) {
-                return delete nodeStore.nodes[--nodeStore.counter];
-            }
-
-            if (!delete nodeStore.nodes[node.id])
-                return false;
-
-            nodeStore.free.push(node.id);
-
-            return true;
-        },
-        assignNodeMetadata: (
-            node: FileSystemNode,
-            owner?: string,
-            userPerm?: AccessString,
-            groupPerm?: AccessString,
-            othersPerm?: AccessString
-        ) => {
-            const user: AccessString = userPerm ||
-                (node.type === "dir" ? "rwx" :
-                node.type === "file" ? "rw-" : "rw-");
-            const group: AccessString = groupPerm ||
-                (node.type === "dir" ? "r-x" :
-                node.type === "file" ? "r--" : "r--");
-            const others: AccessString = othersPerm ||
-                (node.type === "dir" ? "r-x" :
-                node.type === "file" ? "r--" : "r--");
-
-            const now = Date.now();
-
-            node.meta = {
-                created: now,
-                modified: now,
-                owner: owner || "",
-                permissions: {
-                    user,
-                    group,
-                    others,
-                },
-            };
-        },
-        createRoot: () => {
-            root = helpers.allocateNode({
-                type: "dir",
-                id: -1,
-                name: "",
-                children: {},
-            });
-        },
-    };
-
-    helpers.createRoot();
-
-    return {
-        traverse(path: string, cwd?: string): FileSystemNode | undefined {
-            const parts = path.split("/");
-
-            if (!root)
-                throw new Error("Root not mounted");
-
-            let current: FileSystemNode | undefined = root;
-
-            if (path.startsWith("/"))
-                current = root;
-
-            for (let i = 0; i < parts.length; i++) {
-                if (!current)
-                    break;
-                if (current.type === "file")
-                    break;
-                if (current.type === "link") {
-                    current = this.traverse(current.dest);
-                    i--;
-                    continue;
-                }
-                const part = parts[i];
-                current = nodeStore.nodes[(current as DirectoryNode).children[part]];
-            }
-
-            return current;
-        },
-
-        readFile(path: string) {
-            //return string when file read successfully and
-            // undefined when file not found or read failed
-
-            return undefined;
-        },
-
-        writeFile(path: string, text: string) {
-            const encoder = new TextEncoder();
-            //encoder.encodeInto();
-            //make return false if file not found or
-            // other write failure
-            return true;
-        },
-    };
+export interface INodeStore {
+	nodes: Record<number, IFileSystemNode>;
+	free: number[];
+	counter: number;
+	freeHead: number;
 };
 
-export type NodeStore = {
-    nodes: Record<number, FileSystemNode>;
-    free: number[];
-    counter: number;
-    freeHead: number;
+export interface INodeMetadata {
+	created: number;
+	modified: number;
+	owner: string;
+	permissions: IAccess;
 };
 
-export type NodeMetadata = {
-    created: number;
-    modified: number;
-    owner: string;
-    permissions: Access;
+export interface IFileSystemNode {
+	type: FileSystemNodeType;
+	id: number;
+	name: string;
+	parentId: number;
+	meta?: INodeMetadata;
 };
 
-export type BaseNode = {
-    id: number;
-    name: string;
-    meta?: NodeMetadata;
-};
+export interface IFileNode extends IFileSystemNode {
+	type: "file";
+	content: string; // for simplicity, for now.
+}
 
-export type FileNode = {
-    type: "file";
-    content: Uint8Array;
-} & BaseNode;
+export interface IDirectoryNode extends IFileSystemNode {
+	type: "dir";
+	children: Record<string, number>;
+}
 
-export type DirectoryNode = {
-    type: "dir";
-    children: Record<string, number>;
-} & BaseNode;
-
-export type SymLinkNode = {
-    type: "link";
-    dest: string;
-} & BaseNode;
-
-export type FileSystemNode = FileNode | DirectoryNode | SymLinkNode;
+export interface ILinkNode extends IFileSystemNode {
+	type: "link";
+	dest: string;
+}
 
 type ReadFlag = "r" | "-";
 type WriteFlag = "w" | "-";
@@ -197,8 +336,8 @@ type ExecFlag = "x" | "-";
 
 export type AccessString = `${ReadFlag}${WriteFlag}${ExecFlag}`;
 
-export type Access = {
-    user: AccessString;
-    group: AccessString;
-    others: AccessString;
+export interface IAccess {
+	user: AccessString;
+	group: AccessString;
+	others: AccessString;
 };

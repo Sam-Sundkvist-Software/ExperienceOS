@@ -1,5 +1,9 @@
 import { XpUser } from "../api";
+import Authent, { IAuthentication } from "./Authent";
+import FileSystem, { IFileSystem } from "./FileSystem";
 import ISystemAPI from "./ISystemAPI";
+import Registry, { IRegistry } from "./Registry";
+import Utils from "./Utils";
 
 export let API: ISystemAPI | undefined;
 
@@ -9,39 +13,33 @@ export let API: ISystemAPI | undefined;
  * and initializes the API.
  */
 export default class SystemKernel {
-	private _state: {
-		currentUser: XpUser | null;
-	};
+	private _fs: IFileSystem;
+	private _reg: IRegistry;
+	private _wm: null;
+	private _auth: IAuthentication;
 
 	constructor() {
-		this._state = {
-			currentUser: null,
-		};
-		API = (() => {
 
+		this._fs = new FileSystem();
+		this._reg = new Registry(this._fs);
+		this._wm = null;
+		this._auth = new Authent(this._reg);
+
+		const self = this;
+
+		API = (() => {
+			// EVENTUALLY
 
 			return {
 				hash(str) {
-					let h = 0;
-					for (let i = 0; i < str.length; i++) {
-						h = ((h << 5) - h) + str.charCodeAt(i);
-						h |= 0;
-					}
-					return (h >>> 0).toString(16);
+					return Utils.hash(str);
 				},
 				Auth: {
 					login(username, password) {
-						
+						return self._auth.login(username, password);
 					},
 				},
 			};
 		})();
-	}
-
-	loginUser(o: {
-		username: string;
-		password: string;
-	}): boolean {
-		
 	}
 }
