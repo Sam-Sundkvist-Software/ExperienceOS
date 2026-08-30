@@ -1,8 +1,8 @@
 import { showContextMenu } from "../../compfwk";
-import WindowManager from "./WindowManager";
+import IWindowHost from "./IWindowHost";
 
 export default class Window {
-	public wm: WindowManager;
+	public wh: IWindowHost;
 	public id: string;
 	public title: string;
 	public width: number;
@@ -24,13 +24,14 @@ export default class Window {
 	constructor(options: WindowOptions) {
 		if (!options.wm)
 			throw new Error("Cannot create window without Window Mgr");
-		this.wm = options.wm;
+		this.wh = options.wm;
 		this.id = 'win-' + Math.random().toString(36).substr(2, 9);
 		this.title = options.title || 'New Window';
 		this.width = options.width || 400;
 		this.height = options.height || 300;
-		this.x = options.x || (50 + this.wm.windows.length * 20);
-		this.y = options.y || (50 + this.wm.windows.length * 20);
+		const cascadedPos = this.wh.getCascadedPosition();
+		this.x = options.x || cascadedPos.x;
+		this.y = options.y || cascadedPos.y;
 		this.isDialog = !!options.isDialog;
 		this.type = options.type || 'normal'; // normal, modal, sub, topmodal
 		this.parent = options.parent;
@@ -41,16 +42,137 @@ export default class Window {
 		this.prevRect = null;
 
 		if (this.type === 'topmodal') {
-			this._createOverlay();
+			this.createOverlay();
 		} else if (this.type === 'modal' && this.parent) {
-			this._createModalOverlay();
+			this.createModalOverlay();
 		}
 
-		this.element = this._createUI(options.content || "");
-		this._initEvents();
+		this.element = this.createUI(options.content || "");
+		this.initEvents();
 	}
 
-	_createOverlay() {
+	
+
+	focus() { // TODO: MOVE TO WINDOW MANAGER?
+		var self = this;
+		// Move to end of array (top of stack)
+		this.wh.windows = this.wh.windows.filter((w) => { return w.id !== self.id; });
+		this.wh.windows.push(this);
+		
+		// Update Z-indices and active state
+		this.wh.windows.forEach((w, idx) => {
+			let z = this.wh.baseZIndex + (idx * 10); // Use step of 10 to allow overlays in between
+			if (w.type === 'topmodal') z += 50000;
+			w.element.style.zIndex = z + "";
+			w.element.classList.remove('active');
+			
+			if (w.overlay) w.overlay.style.zIndex = z - 1 + "";
+			if (w.modalOverlay) w.modalOverlay.style.zIndex = z - 1 + "";
+		});
+
+		this.element.classList.add('active');
+		this.element.style.display = 'flex';
+		this.isMinimized = false;
+		this.wh.activeWindowId = this.id;
+		this.wh.updateTaskbar();
+	}
+
+	minimize() {
+		this.element.style.display = 'none';
+		this.isMinimized = true;
+		this.element.classList.remove('active');
+		
+		// Focus next window in stack if this was active
+		if (this.wh.activeWindowId === this.id) {
+			this.wh.activeWindowId = null;
+			var visibleWindows = this.wh.windows.filter((w) => !w.isMinimized);
+			if (visibleWindows.length > 0) {
+				visibleWindows[visibleWindows.length - 1].focus();
+			}
+		}
+		this.wh.updateTaskbar();
+	}
+
+	maximize() {
+		if (this.isMaximized) {
+			this.restore();
+			return;
+		}
+		this.prevRect = {
+			width: this.width,
+			height: this.height,
+			x: this.x,
+			y: this.y
+		};
+		this.isMaximized = true;
+		this.element.style.width = '100%';
+		this.element.style.height = 'calc(100% - 30px)';
+		this.element.style.left = '0';
+		this.element.style.top = '0';
+		this.element.classList.add('maximized');
+	}
+
+	restore() {
+		if (this.isMinimized) {
+			this.element.style.display = 'flex';
+			this.isMinimized = false;
+			this.focus();
+		} else if (this.isMaximized) {
+			this.isMaximized = false;
+			if (!this.prevRect)
+				throw new Error("Unable to restore window");
+			this.width = this.prevRect.width;
+			this.height = this.prevRect.height;
+			this.x = this.prevRect.x;
+			this.y = this.prevRect.y;
+			this.element.style.width = this.width + 'px';
+			this.element.style.height = this.height + 'px';
+			this.element.style.left = this.x + 'px';
+			this.element.style.top = this.y + 'px';
+			this.element.classList.remove('maximized');
+		}
+		this.wh.updateTaskbar();
+	}
+
+	setContent(content: string | HTMLElement) {
+		const contentArea = this.element.querySelector('.window-content');
+		if (!contentArea)
+			throw new Error("Can't set content");
+		contentArea.innerHTML = '';
+		if (typeof content === 'string') {
+			contentArea.innerHTML = content;
+		} else {
+			contentArea.appendChild(content);
+		}
+	}
+
+	setTitle(title: string) {
+		this.title = title;
+		const wt = this.element.querySelector('.window-title') as HTMLElement | null;
+		if (!wt)
+			throw new Error("Cannot update window titlebar title");
+		wt.innerText = title;
+		this.wh.updateTaskbar();
+	}
+
+	close() {
+		if (this.onClose) this.onClose();
+		if (this.overlay) this.overlay.remove();
+		if (this.modalOverlay) this.modalOverlay.remove();
+		this.element.remove();
+		this.wh.windows = this.wh.windows.filter((w) => w.id !== this.id);
+		
+		if (this.wh.activeWindowId === this.id) {
+			this.wh.activeWindowId = null;
+			var visibleWindows = this.wh.windows.filter((w) => !w.isMinimized);
+			if (visibleWindows.length > 0) {
+				visibleWindows[visibleWindows.length - 1].focus();
+			}
+		}
+		this.wh.updateTaskbar();
+	}
+
+	private createOverlay() {
 		const overlay = document.createElement('div');
 		overlay.id = this.id + '-overlay';
 		overlay.className = 'topmodal-overlay';
@@ -65,7 +187,7 @@ export default class Window {
 		this.overlay = overlay;
 	}
 
-	_createModalOverlay() {
+	private createModalOverlay() {
 		const overlay = document.createElement('div');
 		overlay.className = 'modal-overlay';
 		overlay.style.position = 'absolute';
@@ -92,7 +214,7 @@ export default class Window {
 		this.modalOverlay = overlay;
 	}
 
-	_createUI(content: string | Node) {
+	private createUI(content: string | Node) {
 		const win = document.createElement('div');
 		win.id = this.id;
 		win.className = 'window' + (this.isDialog ? ' dialog' : '');
@@ -199,7 +321,7 @@ export default class Window {
 		return win;
 	}
 
-	_initEvents() {
+	private initEvents() {
 		const titlebar = this.element.querySelector('.window-titlebar') as HTMLElement | null;
 		if (!titlebar)
 			throw new Error("Cannot find window titlebar");
@@ -226,125 +348,6 @@ export default class Window {
 		document.addEventListener("pointerup", () => {
 			isDragging = false;
 		});
-	}
-
-	focus() { // TODO: MOVE TO WINDOW MANAGER?
-		var self = this;
-		// Move to end of array (top of stack)
-		this.wm.windows = this.wm.windows.filter((w) => { return w.id !== self.id; });
-		this.wm.windows.push(this);
-		
-		// Update Z-indices and active state
-		this.wm.windows.forEach((w, idx) => {
-			let z = this.wm.baseZIndex + (idx * 10); // Use step of 10 to allow overlays in between
-			if (w.type === 'topmodal') z += 50000;
-			w.element.style.zIndex = z + "";
-			w.element.classList.remove('active');
-			
-			if (w.overlay) w.overlay.style.zIndex = z - 1 + "";
-			if (w.modalOverlay) w.modalOverlay.style.zIndex = z - 1 + "";
-		});
-
-		this.element.classList.add('active');
-		this.element.style.display = 'flex';
-		this.isMinimized = false;
-		this.wm.activeWindowId = this.id;
-		this.wm.updateTaskbar();
-	}
-
-	minimize() {
-		this.element.style.display = 'none';
-		this.isMinimized = true;
-		this.element.classList.remove('active');
-		
-		// Focus next window in stack if this was active
-		if (this.wm.activeWindowId === this.id) {
-			this.wm.activeWindowId = null;
-			var visibleWindows = this.wm.windows.filter((w) => !w.isMinimized);
-			if (visibleWindows.length > 0) {
-				visibleWindows[visibleWindows.length - 1].focus();
-			}
-		}
-		this.wm.updateTaskbar();
-	}
-
-	maximize() {
-		if (this.isMaximized) {
-			this.restore();
-			return;
-		}
-		this.prevRect = {
-			width: this.width,
-			height: this.height,
-			x: this.x,
-			y: this.y
-		};
-		this.isMaximized = true;
-		this.element.style.width = '100%';
-		this.element.style.height = 'calc(100% - 30px)';
-		this.element.style.left = '0';
-		this.element.style.top = '0';
-		this.element.classList.add('maximized');
-	}
-
-	restore() {
-		if (this.isMinimized) {
-			this.element.style.display = 'flex';
-			this.isMinimized = false;
-			this.focus();
-		} else if (this.isMaximized) {
-			this.isMaximized = false;
-			if (!this.prevRect)
-				throw new Error("Unable to restore window");
-			this.width = this.prevRect.width;
-			this.height = this.prevRect.height;
-			this.x = this.prevRect.x;
-			this.y = this.prevRect.y;
-			this.element.style.width = this.width + 'px';
-			this.element.style.height = this.height + 'px';
-			this.element.style.left = this.x + 'px';
-			this.element.style.top = this.y + 'px';
-			this.element.classList.remove('maximized');
-		}
-		this.wm.updateTaskbar();
-	}
-
-	setContent(content: string | HTMLElement) {
-		const contentArea = this.element.querySelector('.window-content');
-		if (!contentArea)
-			throw new Error("Can't set content");
-		contentArea.innerHTML = '';
-		if (typeof content === 'string') {
-			contentArea.innerHTML = content;
-		} else {
-			contentArea.appendChild(content);
-		}
-	}
-
-	setTitle(title: string) {
-		this.title = title;
-		const wt = this.element.querySelector('.window-title') as HTMLElement | null;
-		if (!wt)
-			throw new Error("Cannot update window titlebar title");
-		wt.innerText = title;
-		this.wm.updateTaskbar();
-	}
-
-	close() {
-		if (this.onClose) this.onClose();
-		if (this.overlay) this.overlay.remove();
-		if (this.modalOverlay) this.modalOverlay.remove();
-		this.element.remove();
-		this.wm.windows = this.wm.windows.filter((w) => w.id !== this.id);
-		
-		if (this.wm.activeWindowId === this.id) {
-			this.wm.activeWindowId = null;
-			var visibleWindows = this.wm.windows.filter((w) => !w.isMinimized);
-			if (visibleWindows.length > 0) {
-				visibleWindows[visibleWindows.length - 1].focus();
-			}
-		}
-		this.wm.updateTaskbar();
 	}
 }
 

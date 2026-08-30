@@ -1,14 +1,17 @@
 import { XP_API, XpUser } from "../../api";
 import { showContextMenu } from "../../compfwk";
 import { initDesktop } from "../../main";
+import IWindowHost from "./IWindowHost";
 import Window, { WindowOptions } from "./Window";
 
-export default class WindowManager {
+export default class WindowManager implements IWindowHost {
+	private static _windowCounter: number = 0;
+
 	public windows: Window[];
 	public activeWindowId: string | null;
 	public baseZIndex: number;
 
-	constructor() {
+	public constructor() {
 		this.windows = [];
 		this.activeWindowId = null;
 		this.baseZIndex = 100;
@@ -60,6 +63,18 @@ export default class WindowManager {
 
 		// Disable default context menu
 		document.oncontextmenu = (ev) => ev.preventDefault();
+	}
+
+	public setWindowPosition(window: Window, x: number, y: number): void {
+		
+	}
+
+	public getCascadedPosition(): { x: number; y: number; } {
+		const p = (50 + this.windows.length * 20);
+		return {
+			x: p,
+			y: p,
+		};
 	}
 
 	create(options: WindowOptions) {
@@ -126,6 +141,10 @@ export default class WindowManager {
 
 			taskItems.appendChild(item);
 		});
+	}
+
+	private generateWindowId(): number {
+		return WindowManager._windowCounter++;
 	}
 }
 
