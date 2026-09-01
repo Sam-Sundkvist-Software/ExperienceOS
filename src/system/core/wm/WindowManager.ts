@@ -136,7 +136,7 @@ export default class WindowManager implements IWindowHost {
 		}
 
 		if (this._activeWindowId === window.id)
-			this._activeWindowId = this.windows.length - 1; // always works, and correctly sets itself to -1 if no other windows present, which is never true unless the desktop is fecked.
+			this._activeWindowId = this.windows[this.windows.length - 1].id; // always works, and correctly sets itself to -1 if no other windows present, which is never true unless the desktop is fecked.
 		
 		this.updateTaskbar();
 	}
