@@ -1,3 +1,5 @@
+![logo](./public/ExperienceOS.png)
+
 # ExperienceOS
 
 A highly capable simulated operating system with the following *highly advanced* features:
