@@ -6,6 +6,7 @@ import FileSystem, { IFileSystem } from "./FileSystem";
 import ISystemAPI from "./ISystemAPI";
 import Registry, { IRegistry } from "./Registry";
 import Utils from "./Utils";
+import WindowManager, { showLogonScreen } from "./wm/WindowManager";
 
 export let API: ISystemAPI | undefined;
 
@@ -15,20 +16,24 @@ export let API: ISystemAPI | undefined;
  * and initializes the API.
  */
 export default class Kernel implements IKernel {
+	private _rootElement: HTMLElement;
 	private _fs: IFileSystem;
 	private _reg: IRegistry;
-	private _wm: null;
+	private _wm: WindowManager; // TODO: Use shell/something. An interface at least.
 	private _auth: IAuthentication;
 
-	constructor() {
+	constructor(rootElement: HTMLElement) {
+		this._rootElement = rootElement;
 		this._fs = new FileSystem();
 		this._reg = new Registry(this._fs);
-		this._wm = null;
+		this._wm = new WindowManager(rootElement);
 		this._auth = new Authentication(this._reg);
 	}
 
 	public launch(): void {
 		const self = this;
+
+		showLogonScreen();
 
 		try {
 			API = (() => {
@@ -138,7 +143,7 @@ export default class Kernel implements IKernel {
 						return "";
 					},
 					createWindow(options) {
-						void options;
+						self._wm.create(options);
 						return "";
 					},
 					closeWindow(id) {

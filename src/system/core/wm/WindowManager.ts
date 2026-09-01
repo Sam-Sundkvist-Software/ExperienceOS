@@ -1,17 +1,22 @@
 import { XP_API, XpUser } from "../../api";
 import { showContextMenu } from "../../compfwk";
 import { initDesktop } from "../../main";
-import IWindowHost from "./IWindowHost";
+import IWindowHost, { WindowState } from "./IWindowHost";
 import Window, { WindowOptions } from "./Window";
 
 export default class WindowManager implements IWindowHost {
 	private static _windowCounter: number = 0;
 
+	private _rootElement: HTMLElement;
+	private _activeWindowId: number;
+
 	public windows: Window[];
 	public activeWindowId: string | null;
 	public baseZIndex: number;
 
-	public constructor() {
+	public constructor(rootElement: HTMLElement) {
+		this._rootElement = rootElement;
+		this._activeWindowId = -1;
 		this.windows = [];
 		this.activeWindowId = null;
 		this.baseZIndex = 100;
@@ -20,6 +25,8 @@ export default class WindowManager implements IWindowHost {
 		// make better later, for now
 		// patch to make dynamic instead
 		// of hardcoded to index.html.
+		const desktopElement = document.createDocumentFragment();
+
 		const desktop = document.createElement("div");
 		desktop.id = "desktop";
 		desktop.innerHTML = `
@@ -61,12 +68,77 @@ export default class WindowManager implements IWindowHost {
 			</div>
 		</div>`;
 
+		desktopElement.appendChild(desktop);
+		rootElement.appendChild(desktopElement);
+
 		// Disable default context menu
 		document.oncontextmenu = (ev) => ev.preventDefault();
 	}
 
+	public openWindow(options: WindowOptions): Window {
+		return this.create(options);
+	}
+
 	public setWindowPosition(window: Window, x: number, y: number): void {
+		window.x = x;
+		window.y = y;
+		window.element.style.left = x + "px";
+		window.element.style.top = y + "px";
+	}
+
+	public setWindowSize(window: Window, width: number, height: number): void {
+		window.width = width;
+		window.height = height;
+		window.element.style.width = width + "px";
+		window.element.style.height = height + "px";
+	}
+
+	public setWindowState(window: Window, state: WindowState): void {
+		switch (state) {
+			case WindowState.MINIMIZED:
+				window.minimize();
+				break;
+			case WindowState.MAXIMIZED:
+				window.maximize();
+				break;
+			case WindowState.NORMAL:
+				window.restore();
+				break;
+			case WindowState.FULLSCREEN:
+			default:
+				break;
+		}
+	}
+
+	public setWindowVisibility(window: Window, value: boolean): void {
+		window.visible = value;
+		if (value) {
+			window.element.style.display = "flex";
+		} else {
+			window.element.style.display = "none";
+		}
+		// Hide taskbar button (if applicable right now)
+		this.updateTaskbar();
+	}
+
+	public closeWindow(window: Window): void {
+		if (typeof window.onClose === "function")
+			window.onClose();
+		if (window.overlay)
+			window.overlay.remove();
+		if (window.modalOverlay)
+			window.modalOverlay.remove();
+		window.element.remove();
 		
+		const idxOf = this.windows.indexOf(window);
+		if (idxOf !== -1) {
+			this.windows.splice(idxOf, 1);
+		}
+
+		if (this._activeWindowId === window.id)
+			this._activeWindowId = this.windows.length - 1; // always works, and correctly sets itself to -1 if no other windows present, which is never true unless the desktop is fecked.
+		
+		this.updateTaskbar();
 	}
 
 	public getCascadedPosition(): { x: number; y: number; } {
@@ -77,13 +149,83 @@ export default class WindowManager implements IWindowHost {
 		};
 	}
 
+	public focusWindow(window: Window): void {
+		// Move to end of array (top of stack)
+		const windowIndex = this.windows.indexOf(window);
+		this.windows.splice(windowIndex, 1);
+		this.windows.push(window);
+		this._updateZIndices();
+		window.element.classList.add("active");
+		window.element.style.display = "flex";
+		window.isMinimized = false;
+		this._activeWindowId = window.id;
+		this.updateTaskbar();
+	}
+
+	public minimizeWindow(window: Window): void {
+		window.element.style.display = "none";
+		window.isMinimized = true;
+		window.element.classList.remove('active');
+		
+		// Focus next window in stack if this was active
+		this._updateZIndices();
+		this.updateTaskbar();
+	}
+
+	public maximizeWindow(window: Window): void {
+		if (window.isMaximized) {
+			this.restoreWindow(window);
+			return;
+		}
+
+		window.prevRect = {
+			width: window.width,
+			height: window.height,
+			x: window.x,
+			y: window.y
+		};
+
+		window.isMaximized = true;
+		window.element.style.width = "100%";
+		window.element.style.height = "calc(100% - 30px)";
+		window.element.style.left = "0";
+		window.element.style.top = "0";
+		window.element.classList.add("maximized");
+	}
+
+	public restoreWindow(window: Window): void {
+		if (window.isMinimized) {
+			window.element.style.display = "flex";
+			window.isMinimized = false;
+			this.focusWindow(window);
+		} else if (window.isMaximized) {
+			window.isMaximized = false;
+			if (!window.prevRect)
+				throw new Error("Unable to restore window");
+			window.width = window.prevRect.width;
+			window.height = window.prevRect.height;
+			window.x = window.prevRect.x;
+			window.y = window.prevRect.y;
+			window.element.style.width = window.width + "px";
+			window.element.style.height = window.height + "px";
+			window.element.style.left = window.x + "px";
+			window.element.style.top = window.y + "px";
+			window.element.classList.remove("maximized");
+		}
+		this.updateTaskbar();
+	}
+
 	create(options: WindowOptions) {
-		options.wm = this;
+		options.wh = this;
 		const win = new Window(options);
+		win.id = this._generateWindowId();
 		this.windows.push(win);
-		win.focus();
+		this.focusWindow(win);
 		
 		// Close start menu when a new window is created
+		// TODO: WHY???
+		// LEGACY CODE
+		// REMOVE WHEN POSSIBLE
 		var startMenu = document.getElementById('start-menu');
 		if (startMenu && startMenu.classList.contains('open')) {
 			startMenu.classList.remove('open');
@@ -92,7 +234,7 @@ export default class WindowManager implements IWindowHost {
 		return win;
 	}
 
-	getById(id: string) {
+	public getById(id: number) {
 		for (let i = 0; i < this.windows.length; i++) {
 			if (this.windows[i].id === id)
 				return this.windows[i];
@@ -102,17 +244,17 @@ export default class WindowManager implements IWindowHost {
 	}
 	
 	public updateTaskbar() {
-		const taskItems = document.getElementById('task-items');
+		const taskItems = document.getElementById("task-items");
 		if (!taskItems)
 			return;
 		taskItems.innerHTML = "";
 		this.windows.forEach((win) => {
 			if (win.isDialog)
 				return;
-			const item = document.createElement('div');
+			const item = document.createElement("div");
 			item.className = 'task-item';
-			if (win.id === this.activeWindowId && !win.isMinimized)
-				item.classList.add('active');
+			if (win.id === this._activeWindowId && !win.isMinimized)
+				item.classList.add("active");
 			item.innerText = win.title;
 			
 			XP_API.showTooltip(item, { text: win.title });
@@ -132,7 +274,7 @@ export default class WindowManager implements IWindowHost {
 			item.onclick = () => {
 				if (win.isMinimized) {
 					win.restore();
-				} else if (win.id === this.activeWindowId) {
+				} else if (win.id === this._activeWindowId) {
 					win.minimize();
 				} else {
 					win.focus();
@@ -143,7 +285,20 @@ export default class WindowManager implements IWindowHost {
 		});
 	}
 
-	private generateWindowId(): number {
+	private _updateZIndices(): void {
+		this.windows.forEach((w, idx) => {
+			let z = 100 + idx;
+			w.element.style.zIndex = z.toString();
+			w.element.classList.remove("active");
+			
+			if (w.overlay)
+				w.overlay.style.zIndex = z - 1 + "";
+			if (w.modalOverlay)
+				w.modalOverlay.style.zIndex = z - 1 + "";
+		});
+	}
+
+	private _generateWindowId(): number {
 		return WindowManager._windowCounter++;
 	}
 }

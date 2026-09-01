@@ -34,9 +34,9 @@ export default interface ISystemAPI {
 	getIconCache(): Record<string, string>;
 	setIconCache(data: Record<string, string>): boolean | undefined;
 	getIcon(path: string): string;
-	createWindow(options: WindowOptions): string;
-	closeWindow(id: string): void;
-	focusWindow(id: string): void;
+	createWindow(options: WindowOptions): number;
+	closeWindow(id: number): void;
+	focusWindow(id: number): void;
 	setWindowContent(id: string, content: string | HTMLElement): void;
 	setWindowTitle(id: string, title: string): void;
 	updateTaskbar(): void;

@@ -6,12 +6,14 @@ import Log, { ILog } from "./Log";
  * The boot-up manager (BootCore) for ExperienceOS.
  */
 export default class BootCore implements IBootCore {
+	private _rootElement: HTMLElement;
 	private _log: ILog;
 	private _kernel: IKernel;
 
-	public constructor() {
+	public constructor(rootElement: HTMLElement) {
+		this._rootElement = rootElement;
 		this._log = new Log();
-		this._kernel = new Kernel();
+		this._kernel = new Kernel(rootElement);
 	}
 
 	public startBoot(): void {

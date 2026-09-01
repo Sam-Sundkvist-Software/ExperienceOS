@@ -71,7 +71,7 @@ export interface IInstallerOptions {
 
 export const XP_API: ISystemAPI = (function() {
     const trayIcons = [];
-    const wm = new WindowManager();
+    const wm = new WindowManager(document.querySelector("#desktop") as HTMLElement);
     let currentUser: XpUser | null = null;
 
     return {
@@ -505,22 +505,22 @@ export const XP_API: ISystemAPI = (function() {
             const win = wm.create(options);
             return win.id;
         },
-        closeWindow: (id: string) => {
+        closeWindow: (id: number) => {
             const win = wm.getById(id);
             if (win)
                 win.close();
         },
-        focusWindow: (id: string) => {
+        focusWindow: (id: number) => {
             const win = wm.getById(id);
             if (win)
                 win.focus();
         },
-        setWindowContent: (id: string, content: string | HTMLElement) => {
+        setWindowContent: (id: number, content: string | HTMLElement) => {
             const win = wm.getById(id);
             if (win)
                 win.setContent(content);
         },
-        setWindowTitle: (id: string, title: string) => {
+        setWindowTitle: (id: number, title: string) => {
             const win = wm.getById(id);
             if (win)
                 win.setTitle(title);

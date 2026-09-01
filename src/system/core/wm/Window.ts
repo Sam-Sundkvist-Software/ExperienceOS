@@ -3,7 +3,7 @@ import IWindowHost from "./IWindowHost";
 
 export default class Window {
 	public wh: IWindowHost;
-	public id: string;
+	public id: number;
 	public title: string;
 	public width: number;
 	public height: number;
@@ -20,12 +20,13 @@ export default class Window {
 	public overlay?: HTMLDivElement;
 	public modalOverlay?: HTMLDivElement;
 	public element: HTMLDivElement;
+	public visible: boolean;
 
 	constructor(options: WindowOptions) {
-		if (!options.wm)
+		if (!options.wh)
 			throw new Error("Cannot create window without Window Mgr");
-		this.wh = options.wm;
-		this.id = 'win-' + Math.random().toString(36).substr(2, 9);
+		this.wh = options.wh;
+		this.id = Math.floor(Math.random() * 100000); // TODO: make work
 		this.title = options.title || 'New Window';
 		this.width = options.width || 400;
 		this.height = options.height || 300;
@@ -33,7 +34,7 @@ export default class Window {
 		this.x = options.x || cascadedPos.x;
 		this.y = options.y || cascadedPos.y;
 		this.isDialog = !!options.isDialog;
-		this.type = options.type || 'normal'; // normal, modal, sub, topmodal
+		this.type = options.type || WindowType.NORMAL; // normal, modal, sub, topmodal
 		this.parent = options.parent;
 		this.resizable = !!options.resizable;
 		this.isMinimized = false;
@@ -42,104 +43,38 @@ export default class Window {
 		this.prevRect = null;
 
 		if (this.type === 'topmodal') {
-			this.createOverlay();
+			this._createOverlay();
 		} else if (this.type === 'modal' && this.parent) {
-			this.createModalOverlay();
+			this._createModalOverlay();
 		}
 
-		this.element = this.createUI(options.content || "");
+		this.element = this._createUI(options.content || "");
+		this.visible = true;
 		this.initEvents();
 	}
 
-	
-
-	focus() { // TODO: MOVE TO WINDOW MANAGER?
-		var self = this;
-		// Move to end of array (top of stack)
-		this.wh.windows = this.wh.windows.filter((w) => { return w.id !== self.id; });
-		this.wh.windows.push(this);
-		
-		// Update Z-indices and active state
-		this.wh.windows.forEach((w, idx) => {
-			let z = this.wh.baseZIndex + (idx * 10); // Use step of 10 to allow overlays in between
-			if (w.type === 'topmodal') z += 50000;
-			w.element.style.zIndex = z + "";
-			w.element.classList.remove('active');
-			
-			if (w.overlay) w.overlay.style.zIndex = z - 1 + "";
-			if (w.modalOverlay) w.modalOverlay.style.zIndex = z - 1 + "";
-		});
-
-		this.element.classList.add('active');
-		this.element.style.display = 'flex';
-		this.isMinimized = false;
-		this.wh.activeWindowId = this.id;
-		this.wh.updateTaskbar();
+	focus() { 
+		this.wh.focusWindow(this);
 	}
 
 	minimize() {
-		this.element.style.display = 'none';
-		this.isMinimized = true;
-		this.element.classList.remove('active');
-		
-		// Focus next window in stack if this was active
-		if (this.wh.activeWindowId === this.id) {
-			this.wh.activeWindowId = null;
-			var visibleWindows = this.wh.windows.filter((w) => !w.isMinimized);
-			if (visibleWindows.length > 0) {
-				visibleWindows[visibleWindows.length - 1].focus();
-			}
-		}
-		this.wh.updateTaskbar();
+		this.wh.minimizeWindow(this);
 	}
 
 	maximize() {
-		if (this.isMaximized) {
-			this.restore();
-			return;
-		}
-		this.prevRect = {
-			width: this.width,
-			height: this.height,
-			x: this.x,
-			y: this.y
-		};
-		this.isMaximized = true;
-		this.element.style.width = '100%';
-		this.element.style.height = 'calc(100% - 30px)';
-		this.element.style.left = '0';
-		this.element.style.top = '0';
-		this.element.classList.add('maximized');
+		this.wh.maximizeWindow(this);
 	}
 
 	restore() {
-		if (this.isMinimized) {
-			this.element.style.display = 'flex';
-			this.isMinimized = false;
-			this.focus();
-		} else if (this.isMaximized) {
-			this.isMaximized = false;
-			if (!this.prevRect)
-				throw new Error("Unable to restore window");
-			this.width = this.prevRect.width;
-			this.height = this.prevRect.height;
-			this.x = this.prevRect.x;
-			this.y = this.prevRect.y;
-			this.element.style.width = this.width + 'px';
-			this.element.style.height = this.height + 'px';
-			this.element.style.left = this.x + 'px';
-			this.element.style.top = this.y + 'px';
-			this.element.classList.remove('maximized');
-		}
-		this.wh.updateTaskbar();
+		this.wh.restoreWindow(this);
 	}
 
 	setContent(content: string | HTMLElement) {
-		const contentArea = this.element.querySelector('.window-content');
+		const contentArea = this.element.querySelector(".window-content");
 		if (!contentArea)
 			throw new Error("Can't set content");
-		contentArea.innerHTML = '';
-		if (typeof content === 'string') {
+		contentArea.innerHTML = "";
+		if (typeof content === "string") {
 			contentArea.innerHTML = content;
 		} else {
 			contentArea.appendChild(content);
@@ -148,7 +83,7 @@ export default class Window {
 
 	setTitle(title: string) {
 		this.title = title;
-		const wt = this.element.querySelector('.window-title') as HTMLElement | null;
+		const wt = this.element.querySelector(".window-title") as HTMLElement | null;
 		if (!wt)
 			throw new Error("Cannot update window titlebar title");
 		wt.innerText = title;
@@ -156,23 +91,13 @@ export default class Window {
 	}
 
 	close() {
-		if (this.onClose) this.onClose();
-		if (this.overlay) this.overlay.remove();
-		if (this.modalOverlay) this.modalOverlay.remove();
-		this.element.remove();
-		this.wh.windows = this.wh.windows.filter((w) => w.id !== this.id);
 		
-		if (this.wh.activeWindowId === this.id) {
-			this.wh.activeWindowId = null;
-			var visibleWindows = this.wh.windows.filter((w) => !w.isMinimized);
-			if (visibleWindows.length > 0) {
-				visibleWindows[visibleWindows.length - 1].focus();
-			}
-		}
-		this.wh.updateTaskbar();
 	}
 
-	private createOverlay() {
+	// THESE METHODS ARE J U N K:
+	// TODO: exterminate these methods.
+
+	private _createOverlay() {
 		const overlay = document.createElement('div');
 		overlay.id = this.id + '-overlay';
 		overlay.className = 'topmodal-overlay';
@@ -187,7 +112,7 @@ export default class Window {
 		this.overlay = overlay;
 	}
 
-	private createModalOverlay() {
+	private _createModalOverlay() {
 		const overlay = document.createElement('div');
 		overlay.className = 'modal-overlay';
 		overlay.style.position = 'absolute';
@@ -214,9 +139,9 @@ export default class Window {
 		this.modalOverlay = overlay;
 	}
 
-	private createUI(content: string | Node) {
-		const win = document.createElement('div');
-		win.id = this.id;
+	private _createUI(content: string | Node) {
+		const win = document.createElement("div");
+		win.id = this.id.toString();
 		win.className = 'window' + (this.isDialog ? ' dialog' : '');
 		win.style.width = this.width + 'px';
 		win.style.height = this.height + 'px';
@@ -363,7 +288,12 @@ export interface WindowOptions {
 	resizable?: boolean;
 	onClose?: Function;
 	content?: string | Node;
-	wm?: WindowManager;
+	wh?: IWindowHost;
 }
 
-export type WindowType = "normal" | "modal" | "sub" | "topmodal";
+export enum WindowType {
+	NORMAL = "normal",
+	MODAL = "modal",
+	SUB = "sub",
+	TOPMODAL = "topmodal",
+}

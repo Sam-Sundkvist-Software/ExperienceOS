@@ -1,4 +1,5 @@
 import { XP_API, XpUser } from "./api";
+import Kernel, { IKernel } from "./core/Kernel";
 import { showLogonScreen } from "./core/wm/WindowManager";
 
 /**
@@ -7,13 +8,16 @@ import { showLogonScreen } from "./core/wm/WindowManager";
  */
 export default class Boot implements IBoot {
 	private _rootElement: HTMLElement | null;
+	private _kernel: IKernel | null;
 
 	public constructor() {
 		this._rootElement = null;
+		this._kernel = null;
 	}
 
 	public boot(rootElement: HTMLElement): BootStatus | undefined {
 		this._rootElement = rootElement;
+		this._kernel = new Kernel(rootElement);
 
 		this.setupSystemErrorHandler();
 

@@ -4,7 +4,7 @@ import { preloadApps } from "./preload";
 import BootCore from "./core/BootCore";
 
 function main() {
-	const bootCore = new BootCore();
+	const bootCore = new BootCore(document.body);
 	bootCore.startBoot();
 }
 
