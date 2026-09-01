@@ -12,3 +12,5 @@ A highly capable simulated operating system with the following *highly advanced*
 	An advanced but highly usable UI element/component API Framework, capable of expressing the most complex of interfaces.
 
 And much more.
+
+![promotion](./public/promotion.png)
