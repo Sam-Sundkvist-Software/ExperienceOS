@@ -1,4 +1,4 @@
-![logo](./public/ExperienceOS.png)
+![logo](./public/logo.png)
 
 # ExperienceOS
 
