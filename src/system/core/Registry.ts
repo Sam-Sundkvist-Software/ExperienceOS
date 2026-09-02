@@ -1,4 +1,5 @@
 import { IFileSystem } from "./FileSystem";
+import { IRegistryAPI } from "./ISystemAPI";
 
 export const DEFAULT_REGISTRY_PATH = "C:/System/sysconf.json";
 
@@ -13,11 +14,38 @@ export default class Registry implements IRegistry {
 		this._cache = null;
 	}
 
+	public createApi(): IRegistryAPI {
+		const self = this;
+		return Object.freeze({
+			groupExists(path) {
+				return self.groupExists(path)
+			},
+			valueExists(path) {
+				return self.nodeExists(path);
+			},
+			createGroup(path, recurse = false) {
+				self.createGroup(path, recurse);
+			},
+			getValue(path) {
+				return self.getNodeValue(path);
+			},
+			setValue(path, value) {
+				self.setNodeValue(path, value);
+			},
+			deleteGroup(path, recurse = false) {
+				self.deleteGroup(path, recurse);
+			},
+			deleteValue(path) {
+				self.deleteNode(path);
+			},
+		} as IRegistryAPI);
+	}
+
 	public load(): void {
 		try {
-			this._fs.readFile(this._src);
+			this._cache = JSON.parse(this._fs.readFile(this._src));
 		} catch {
-			throw new RegistryError("Cannot access source file.");
+			throw new RegistryError("Cannot access source file or source file is malformed.");
 		}
 	}
 
@@ -25,27 +53,30 @@ export default class Registry implements IRegistry {
 		try {
 			this._fs.writeFile(this._src, JSON.stringify(this._cache));
 		} catch {
-			throw new RegistryError("Cannot access source file or unable to save corrupted cached registry.");
+			throw new RegistryError("Unable to save corrupted cached registry. The cache may contain invalid items.");
 		}
 	}
 
 	public groupExists(path: string): boolean {
-		if (!this._cache)
-			throw new RegistryError("Registry not loaded.");
-		if (this._cache.type !== RegistryNodeType.GROUP)
-			throw new RegistryError("Invalid registry root.");
-		const node = this.traverseReg(path);
+		this._throwIfUnloaded();
+
+		const node = this._traverseReg(path);
 		return !!node && node.type === RegistryNodeType.GROUP;
 	}
 
+	public nodeExists(path: string): boolean {
+		this._throwIfUnloaded();
+
+		const node = this._traverseReg(path);
+
+		return !!node && node.type === RegistryNodeType.VALUE;
+	}
+
 	public createGroup(path: string, recurse: boolean): void {
-		if (!this._cache)
-			throw new RegistryError("Registry not loaded.");
-		if (this._cache.type !== RegistryNodeType.GROUP)
-			throw new RegistryError("Invalid registry root.");
+		this._throwIfUnloaded();
 
 		const parts = path.split("/");
-		let current: RegistryNode = this._cache;
+		let current: RegistryNode = this._cache!;
 
 		for (let i = 0; i < parts.length; i++) {
 			const nodeName = parts[i];
@@ -69,11 +100,9 @@ export default class Registry implements IRegistry {
 	}
 
 	public getNodeValue<T>(path: string): T {
-		if (!this._cache)
-			throw new RegistryError("Registry not loaded.");
-		if (this._cache.type !== RegistryNodeType.GROUP)
-			throw new RegistryError("Invalid registry root.");
-		const node = this.traverseReg(path);
+		this._throwIfUnloaded();
+
+		const node = this._traverseReg(path);
 
 		if (!node)
 			throw new RegistryError("Cannot access node.");
@@ -84,13 +113,10 @@ export default class Registry implements IRegistry {
 	}
 
 	public setNodeValue<T>(path: string, value: T): void {
-		if (!this._cache)
-			throw new RegistryError("Registry not loaded.");
-		if (this._cache.type !== RegistryNodeType.GROUP)
-			throw new RegistryError("Invalid registry root.");
+		this._throwIfUnloaded();
 
 		const parts = path.split("/");
-		let current: RegistryNode = this._cache;
+		let current: RegistryNode = this._cache!;
 
 		let i = 0;
 		for (const part of parts) {
@@ -117,7 +143,28 @@ export default class Registry implements IRegistry {
 		}
 	}
 
-	private traverseReg(path: string): RegistryNode | null {
+	public deleteGroup(path: string, recurse: boolean): void {
+		this._throwIfUnloaded();
+
+		// TODO: Implement
+		throw new RegistryError("Group deletion not implemented.");
+	}
+
+	public deleteNode(path: string): void {
+		this._throwIfUnloaded();
+
+		// TODO: Implement
+		throw new RegistryError("Node deletion not implemented.");
+	}
+
+	private _throwIfUnloaded() {
+		if (!this._cache)
+			throw new RegistryError("Registry not loaded.");
+		if (this._cache.type !== RegistryNodeType.GROUP)
+			throw new RegistryError("Invalid registry root.");
+	}
+
+	private _traverseReg(path: string): RegistryNode | null {
 		const parts = path.split("/");
 		let current = this._cache;
 
@@ -126,7 +173,7 @@ export default class Registry implements IRegistry {
 				return null;
 
 			if (current.type !== RegistryNodeType.GROUP)
-				continue;
+				break;
 
 			current = current.children[part];
 		}
@@ -160,6 +207,7 @@ export enum RegistryNodeType {
 }
 
 export interface IRegistry {
+	createApi(): IRegistryAPI;
 
 	/**
 	 * Loads information from the FS to the SystemCT
@@ -180,6 +228,11 @@ export interface IRegistry {
 	groupExists(path: string): boolean;
 
 	/**
+	 * Returns a boolean indicating if the specified path points to a valid value node.
+	 */
+	nodeExists(path: string): boolean;
+
+	/**
 	 * Creates a registry group. If the group already exists, nothing is done.
 	 * @param recurse Whether to allow creating several nested groups at once, instead of only the deepest one.
 	 */
@@ -196,6 +249,19 @@ export interface IRegistry {
 	 * @throws If the specified path is invalid.
 	 */
 	setNodeValue<T>(path: string, value: T): void;
+
+	/**
+	 * Deletes a group.
+	 * @param recurse Deletes all sub-groups and sub-items.
+	 * @throws If the group cannot be deleted.
+	 */
+	deleteGroup(path: string, recurse: boolean): void;
+
+	/**
+	 * Deletes a node.
+	 * @throws If the node cannot be deleted.
+	 */
+	deleteNode(path: string): void;
 
 	/*
 	getKeys(key: string): string[];

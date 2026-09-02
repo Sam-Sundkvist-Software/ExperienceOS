@@ -1,3 +1,4 @@
+import { IAuthenticationAPI } from "./ISystemAPI";
 import { IRegistry } from "./Registry";
 
 export const DEFAULT_USERS_REGKEY = "System/Users";
@@ -77,6 +78,8 @@ export class AuthenticationError extends Error {
 }
 
 export interface IAuthentication {
+	createApi(): IAuthenticationAPI;
+
 	/**
 	 * Forcefully logs in the user
 	 * @returns A boolean indicating if the login completed.

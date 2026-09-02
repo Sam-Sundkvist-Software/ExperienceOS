@@ -1,3 +1,5 @@
+import { IFileSystemAPI } from "./ISystemAPI";
+
 export const DEFAULT_COMPACTION_THRESHOLD = 100;
 
 /**
@@ -24,6 +26,43 @@ export default class FileSystem implements IFileSystem {
 			parentId: -1,
 			children: {},
 		} as IDirectoryNode);
+	}
+
+	public createApi(): IFileSystemAPI {
+		const self = this;
+		return Object.freeze({
+			directoryExists(path) {
+				const stat = self.stat(path);
+				return !!stat && stat.type === "dir";
+			},
+			fileExists(path) {
+				const stat = self.stat(path);
+				return !!stat && stat.type === "file";
+			},
+			createDirectory(path, recurse = false) {
+				self.createDirectory(path, recurse);
+			},
+			createFile(path, overwrite = false) {
+				if (!overwrite && !!self.stat(path))
+					throw new FileSystemError("File already exists.");
+				self.writeFile(path, "");
+			},
+			readDirectory(path) {
+				const dir = self.traverse(path);
+				if (!dir || dir.type !== "dir")
+					throw new FileSystemError("Directory does not exist.");
+				return Object.keys((dir as IDirectoryNode).children);
+			},
+			readFile(path) {
+				return self.readFile(path);
+			},
+			deleteDirectory(path, recurse = false) {
+				self.deleteDirectory(path, recurse);
+			},
+			deleteFile(path) {
+				self.deleteFile(path);
+			},
+		} as IFileSystemAPI);
 	}
 
 	public traverse(path: string, cwd?: string): IFileSystemNode | null {
@@ -107,6 +146,16 @@ export default class FileSystem implements IFileSystem {
 		} as IDirectoryNode);
 
 		this.allocateNode(newNode);
+	}
+
+	public deleteDirectory(path: string, recurse: boolean): void {
+		// TODO: implement
+		throw new FileSystemError("Directory deletion not implemented.");
+	}
+
+	public deleteFile(path: string): void {
+		// TODO: Implement
+		throw new FileSystemError("File deletion not implemented.");
 	}
 
 	private getParentNodeOf(path: string): IFileSystemNode {
@@ -235,6 +284,8 @@ export class FileSystemError extends Error {
 }
 
 export interface IFileSystem {
+	createApi(): IFileSystemAPI;
+
 	/**
 	 * Attempts to resolve the specified path to a file system node.
 	 * @returns The resolved node, or `null` if no valid node was found.
@@ -265,6 +316,19 @@ export interface IFileSystem {
 	 * @throws If the directory cannot be created.
 	 */
 	createDirectory(path: string, recurse: boolean): void;
+
+	/**
+	 * Deletes a directory.
+	 * @param recurse Deletes all contents and subdirectories automatically.
+	 * @throws If the directory cannot be deleted.
+	 */
+	deleteDirectory(path: string, recurse: boolean): void;
+
+	/**
+	 * Deletes a file.
+	 * @throws If the file cannot be deleted.
+	 */
+	deleteFile(path: string): void;
 }
 
 export interface IMountable {

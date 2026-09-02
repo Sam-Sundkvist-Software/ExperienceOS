@@ -69,7 +69,8 @@ export interface IInstallerOptions {
 	modal?: boolean;
 }
 
-export const XP_API: ISystemAPI = (function() {
+export const XP_API: ISystemAPI = null as any as ISystemAPI;
+(function() {
     const trayIcons = [];
     const wm = new WindowManager(document.querySelector("#desktop") as HTMLElement);
     let currentUser: XpUser | null = null;

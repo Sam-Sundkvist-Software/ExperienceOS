@@ -17,8 +17,8 @@ export default class BootCore implements IBootCore {
 	}
 
 	public startBoot(): void {
+		this._log.write("Launching kernel...");
 		try {
-			this._log.write("Launching kernel...");
 			this._kernel.launch();
 		} catch {
 			throw new BootError("The kernel failed to launch.");

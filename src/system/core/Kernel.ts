@@ -143,8 +143,8 @@ export default class Kernel implements IKernel {
 						return "";
 					},
 					createWindow(options) {
-						self._wm.create(options);
-						return "";
+						const win = self._wm.create(options);
+						return win.id;
 					},
 					closeWindow(id) {
 						void id;

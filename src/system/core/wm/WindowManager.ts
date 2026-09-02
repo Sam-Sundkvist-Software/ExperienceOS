@@ -1,4 +1,4 @@
-import { XP_API, XpUser } from "../../api";
+import { XpUser } from "../../api";
 import { showContextMenu } from "../../compfwk";
 import { initDesktop } from "../../main";
 import IWindowHost, { WindowState } from "./IWindowHost";
@@ -257,7 +257,9 @@ export default class WindowManager implements IWindowHost {
 				item.classList.add("active");
 			item.innerText = win.title;
 			
-			XP_API.showTooltip(item, { text: win.title });
+			// TODO: Implement tooltips into WM
+			// to remove the need for external dep.
+			//XP_API.showTooltip(item, { text: win.title });
 
 			item.oncontextmenu = (ev) => {
 				ev.preventDefault();
@@ -402,7 +404,10 @@ export function showLogonScreen() {
 	right.style.paddingLeft = '50px';
 	middle.appendChild(right);
 
-	var users = XP_API.Registry.get<Record<string, XpUser>>('Security/Users');
+	// TODO: require IRegistry in constructor
+	// instead of this crap.
+	//var users = XP_API.Registry.get<Record<string, XpUser>>('Security/Users');
+	const users = {};
 	for (const u in users) {
 		(function(user) {
 			var userContainer = document.createElement('div');
@@ -498,7 +503,7 @@ export function showLogonScreen() {
 				allPwdAreas.forEach((area) => { (area as HTMLElement).style.display = 'none'; });
 				
 				if (user.username === 'Guest') {
-					if (XP_API.Auth.login('Guest', '')) {
+					if (/*XP_API.Auth.login('Guest', '')*/1) {
 						logon.remove();
 						initDesktop();
 					}
@@ -509,7 +514,7 @@ export function showLogonScreen() {
 			};
 			
 			goBtn.onclick = function() {
-				if (XP_API.Auth.login(user.username, pwdInput.value)) {
+				if (/*XP_API.Auth.login(user.username, pwdInput.value)*/1) {
 					logon.remove();
 					initDesktop();
 				} else {
@@ -525,7 +530,7 @@ export function showLogonScreen() {
 			};
 			
 			right.appendChild(userContainer);
-		})(users[u]);
+		})((users as any)[u]);
 	}
 
 	var bottom = document.createElement('div');

@@ -14,19 +14,8 @@ export default interface ISystemAPI {
 		requestEscalation(callback: (result: boolean) => void): void;
 		requestEscalationAsync?(): Promise<boolean>;
 	};
-	FS: {
-		checkAccess(path: string, operation: "read" | "write"): boolean;
-		readFile(path: string): string | null;
-		writeFile(path: string, content: string): boolean | undefined;
-		delete(path: string): boolean;
-		ls(path: string): string[] | null;
-	};
-	Registry: {
-		get<T>(path: string): T | null;
-		set<T>(path: string, value: T): void;
-		delete(path: string): boolean;
-		getAll(): unknown;
-	};
+	FS: IFileSystemAPI;
+	Registry: IRegistryAPI;
 	createElement<T extends keyof HTMLElementTagNameMap>(options: CreateElementOptions<T>): HTMLElementTagNameMap[T];
 	exec(path: string, args?: unknown): boolean;
 	getSCT<T>(): T | null;
@@ -48,4 +37,31 @@ export default interface ISystemAPI {
 	showDialog(options: IDialogOptions): Window;
 	showContextMenu(x: number, y: number, items: MenuItem[]): void;
 	showInstaller(options: IInstallerOptions): string;
+}
+
+export interface IAuthenticationAPI {
+	getUsernames(): string[];
+	getAdmins(): string[];
+	requestEscalation(stage?: number): boolean;
+}
+
+export interface IFileSystemAPI {
+	directoryExists(path: string): boolean;
+	fileExists(path: string): boolean;
+	createDirectory(path: string, recurse?: boolean): void;
+	createFile(path: string, overwrite?: boolean): void;
+	readDirectory(path: string): string[];
+	readFile(path: string): string;
+	deleteDirectory(path: string, recurse?: boolean): void;
+	deleteFile(path: string): void;
+}
+
+export interface IRegistryAPI {
+	groupExists(path: string): boolean;
+	valueExists(path: string): boolean;
+	createGroup(path: string, recurse?: boolean): void;
+	getValue<T = unknown>(path: string): T;
+	setValue<T = unknown>(path: string, value: T): void;
+	deleteGroup(path: string, recurse?: boolean): void;
+	deleteValue(path: string): void;
 }
