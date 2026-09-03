@@ -4,16 +4,7 @@ import Window, { WindowOptions } from "./wm/Window";
 
 export default interface ISystemAPI {
 	hash(str: string): string;
-	Auth: {
-		login(username: string, password: string): boolean;
-		logout(): void;
-		getCurrentUser(): XpUser | null;
-	};
-	UAC: {
-		checkPrivilege(required: XpUserPrivilege): boolean;
-		requestEscalation(callback: (result: boolean) => void): void;
-		requestEscalationAsync?(): Promise<boolean>;
-	};
+	Auth: IAuthenticationAPI;
 	FS: IFileSystemAPI;
 	Registry: IRegistryAPI;
 	createElement<T extends keyof HTMLElementTagNameMap>(options: CreateElementOptions<T>): HTMLElementTagNameMap[T];
@@ -39,13 +30,28 @@ export default interface ISystemAPI {
 	showInstaller(options: IInstallerOptions): string;
 }
 
-export interface IAuthenticationAPI {
+export interface ISystemComponentDetails {
+	id: string;
+	name: string;
+	icon: string;
+	version: string;
+}
+
+export interface ISystemComponentAPI {
+	getComponentDetails(): ISystemComponentDetails;
+}
+
+export interface ISystemComponent<T extends ISystemComponentAPI> {
+	createApi(): T;
+}
+
+export interface IAuthenticationAPI extends ISystemComponentAPI {
 	getUsernames(): string[];
 	getAdmins(): string[];
 	requestEscalation(stage?: number): boolean;
 }
 
-export interface IFileSystemAPI {
+export interface IFileSystemAPI extends ISystemComponentAPI {
 	directoryExists(path: string): boolean;
 	fileExists(path: string): boolean;
 	createDirectory(path: string, recurse?: boolean): void;
@@ -56,7 +62,7 @@ export interface IFileSystemAPI {
 	deleteFile(path: string): void;
 }
 
-export interface IRegistryAPI {
+export interface IRegistryAPI extends ISystemComponentAPI {
 	groupExists(path: string): boolean;
 	valueExists(path: string): boolean;
 	createGroup(path: string, recurse?: boolean): void;

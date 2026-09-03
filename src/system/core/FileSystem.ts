@@ -1,4 +1,4 @@
-import { IFileSystemAPI } from "./ISystemAPI";
+import { IFileSystemAPI, ISystemComponent } from "./ISystemAPI";
 
 export const DEFAULT_COMPACTION_THRESHOLD = 100;
 
@@ -6,7 +6,7 @@ export const DEFAULT_COMPACTION_THRESHOLD = 100;
  * The primary ExperienceOS file system,
  * aka. the expFS.
  */
-export default class FileSystem implements IFileSystem {
+export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFileSystem {
 	private _compactFreelistThreshold: number;
 	private _nodeStore: INodeStore;
 	private _root: IDirectoryNode | null;
