@@ -68,6 +68,7 @@ export interface IRegistryAPI extends ISystemComponentAPI {
 	createGroup(path: string, recurse?: boolean): void;
 	getValue<T = unknown>(path: string): T;
 	setValue<T = unknown>(path: string, value: T): void;
+	getGroupItems(path: string): string[];
 	deleteGroup(path: string, recurse?: boolean): void;
 	deleteValue(path: string): void;
 }

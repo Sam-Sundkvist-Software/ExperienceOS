@@ -25,6 +25,7 @@
 
 		"strict": true,
 		"noImplicitAny": true,
-		"noPropertyAccessFromIndexSignature": true
+		"noPropertyAccessFromIndexSignature": true,
+		"noUncheckedIndexedAccess": true,
 	}
 }

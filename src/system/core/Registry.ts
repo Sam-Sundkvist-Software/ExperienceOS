@@ -3,15 +3,29 @@ import { IRegistryAPI } from "./ISystemAPI";
 
 export const DEFAULT_REGISTRY_PATH = "C:/System/sysconf.json";
 
+/*
+ * Registry Path Format:
+ * 
+ * VALID:
+ * System/Something/Garbage
+ * VALID, when the path points to a group (key):
+ * System/Something/Other/
+ * VALID:
+ * /System/Something/Other
+ * NOT USEFUL:
+ * ./Other
+ * Since the registry doesn't use working "groups" or "keys".
+ */
+
 export default class Registry implements IRegistry {
 	private _fs: IFileSystem;
 	private _src: string;
-	private _cache: RegistryNode | null;
+	private _cache: RegistryNode | undefined;
 
 	public constructor(fs: IFileSystem) {
 		this._fs = fs;
 		this._src = DEFAULT_REGISTRY_PATH;
-		this._cache = null;
+		this._cache = undefined;
 	}
 
 	public createApi(): IRegistryAPI {
@@ -60,87 +74,76 @@ export default class Registry implements IRegistry {
 	public groupExists(path: string): boolean {
 		this._throwIfUnloaded();
 
-		const node = this._traverseReg(path);
-		return !!node && node.type === RegistryNodeType.GROUP;
+		const { finalNode } = this._traversePath(path);
+
+		return finalNode !== undefined && finalNode.type === RegistryNodeType.GROUP;
 	}
 
 	public nodeExists(path: string): boolean {
 		this._throwIfUnloaded();
 
-		const node = this._traverseReg(path);
+		const { finalNode } = this._traversePath(path);
 
-		return !!node && node.type === RegistryNodeType.VALUE;
+		return finalNode !== undefined && finalNode.type === RegistryNodeType.VALUE;
 	}
 
 	public createGroup(path: string, recurse: boolean): void {
 		this._throwIfUnloaded();
-
-		const parts = path.split("/");
-		let current: RegistryNode = this._cache!;
-
-		for (let i = 0; i < parts.length; i++) {
-			const nodeName = parts[i];
-			const currentGrp = current as IRegistryGroup;
-			const node = currentGrp.children[nodeName];
-
-			if (!node) {
-				if (!recurse) {
-					throw new RegistryError("Cannot reach path.");
-				}
-				current = (currentGrp.children[nodeName] = {
-					type: RegistryNodeType.GROUP,
-					children: {},
-				});
-			} else {
-				if (node.type !== RegistryNodeType.GROUP)
-					throw new RegistryError("Conflicting value node.");
-				current = node;
-			}
-		}
+		this._createGroup(path, recurse);
 	}
 
 	public getNodeValue<T>(path: string): T {
 		this._throwIfUnloaded();
 
-		const node = this._traverseReg(path);
+		const { finalNode } = this._traversePath(path);
 
-		if (!node)
+		if (!finalNode)
 			throw new RegistryError("Cannot access node.");
-		if (node.type !== RegistryNodeType.VALUE)
+		if (finalNode.type !== RegistryNodeType.VALUE)
 			throw new RegistryError("Node does not hold a value.");
 
-		return node.value as T;
+		return finalNode.value as T;
 	}
 
 	public setNodeValue<T>(path: string, value: T): void {
 		this._throwIfUnloaded();
 
-		const parts = path.split("/");
-		let current: RegistryNode = this._cache!;
+		const { keysAlongPath, finalNode } = this._traversePath(path);
 
-		let i = 0;
-		for (const part of parts) {
-			const currentGrp = current as IRegistryGroup;
-			const node = currentGrp.children[part];
+		if (!finalNode) {
+			// Create node
+			const groupPath = keysAlongPath.slice(0, keysAlongPath.length - 1).join("/");
+			const finalNode = this._createGroup(groupPath, true);
+			const lastKey = keysAlongPath[keysAlongPath.length - 1]!;
 
-			if (i >= parts.length - 1) {
-				if (!node) {
-					currentGrp.children[part] = {
-						type: RegistryNodeType.VALUE,
-						value,
-					};
-					return;
-				} else if (node.type === RegistryNodeType.GROUP)
-					throw new RegistryError("The specified path points to a group.");
-				node.value = value;
-			}
+			finalNode.children[lastKey] = {
+				type: RegistryNodeType.VALUE,
+				value,
+			};
 
-			if (!node || node.type !== RegistryNodeType.GROUP)
-				throw new RegistryError("Cannot reach node.");
-
-			current = node;
-			i++;
+			return;
 		}
+
+		if (finalNode.type !== RegistryNodeType.VALUE)
+			throw new RegistryError("The specified node cannot hold a value.");
+
+		finalNode.value = value;
+	}
+
+	public getGroupItems(path: string): string[] {
+		this._throwIfUnloaded();
+
+		const { keysAlongPath: keys, finalNode: group } = this._traversePath(path);
+		
+		if (!group)
+			throw new RegistryError("Invalid group.");
+
+		if (group.type !== RegistryNodeType.GROUP)
+			throw new RegistryError("The specified path does not point to a group.");
+
+		const realPath = keys.join("/") + "/";
+
+		return Object.keys(group.children).map(n => realPath + n);
 	}
 
 	public deleteGroup(path: string, recurse: boolean): void {
@@ -164,21 +167,75 @@ export default class Registry implements IRegistry {
 			throw new RegistryError("Invalid registry root.");
 	}
 
-	private _traverseReg(path: string): RegistryNode | null {
-		const parts = path.split("/");
-		let current = this._cache;
+	private _createGroup(path: string, recurse: boolean): IRegistryGroup {
+		const {
+			keysAlongPath,
+			nodesAlongPath,
+		} = this._traversePath(path);
 
-		for (const part of parts) {
-			if (!current)
-				return null;
+		for (let i = 0; i < nodesAlongPath.length; i++) {
+			const node = nodesAlongPath[i];
 
-			if (current.type !== RegistryNodeType.GROUP)
-				break;
+			if (!node) {
+				const prev = nodesAlongPath[i - 1];
 
-			current = current.children[part];
+				if (!prev || prev.type !== RegistryNodeType.GROUP)
+					throw new RegistryError("Cannot create group inside non-group.");
+
+				if (i < nodesAlongPath.length - 1 && !recurse)
+					throw new RegistryError("Cannot reach target group.");
+
+				nodesAlongPath[i] = prev.children[keysAlongPath[i]!] = {
+					type: RegistryNodeType.GROUP,
+					children: {},
+				};
+			}
 		}
 
-		return current;
+		return nodesAlongPath[nodesAlongPath.length - 1] as IRegistryGroup;
+	}
+
+	private _traversePath(path: string): {
+		keysAlongPath: string[];
+		nodesAlongPath: (RegistryNode | undefined)[];
+		finalNode: RegistryNode | undefined;
+	} {
+		const keys: string[] = [""];
+		const nodes: (RegistryNode | undefined)[] = [this._cache];
+		const segments = path.split("/");
+
+		let current = this._cache;
+
+		loop: for (let i = 0; i < segments.length; i++) {
+			const segment = segments[i]!;
+
+			switch (segment) {
+				case "":
+				case ".":
+					break;
+				case "..": {
+					if (nodes.length > 1)
+						current = nodes[nodes.length - 2];
+				} break;
+				default: {
+					if (current && current.type === RegistryNodeType.GROUP) {
+						const child = current.children[segment];
+						current = child;
+					}
+				} break;
+			}
+
+			if (segment !== "") {
+				keys.push(segment);
+				nodes.push(current);
+			}
+		}
+
+		return {
+			keysAlongPath: keys,
+			nodesAlongPath: nodes,
+			finalNode: nodes[nodes.length - 1],
+		};
 	}
 }
 
@@ -249,6 +306,11 @@ export interface IRegistry {
 	 * @throws If the specified path is invalid.
 	 */
 	setNodeValue<T>(path: string, value: T): void;
+
+	/**
+	 * Gets all item keys in a group.
+	 */
+	getGroupItems(path: string): string[];
 
 	/**
 	 * Deletes a group.

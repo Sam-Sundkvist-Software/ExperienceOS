@@ -1,4 +1,4 @@
-import { IAuthenticationAPI } from "./ISystemAPI";
+import { IAuthenticationAPI, ISystemComponent } from "./ISystemAPI";
 import { IRegistry } from "./Registry";
 
 export const DEFAULT_USERS_REGKEY = "System/Users";
@@ -6,7 +6,7 @@ export const DEFAULT_USERS_REGKEY = "System/Users";
 /**
  * The primary authentication subsystem for ExperienceOS.
  */
-export default class Authentication implements IAuthentication {
+export default class Authentication implements ISystemComponent<IAuthenticationAPI>, IAuthentication {
 	private _registry: IRegistry;
 	private _usersRegKey: string;
 	private _activeUser: IUserData | null;
@@ -15,6 +15,15 @@ export default class Authentication implements IAuthentication {
 		this._registry = registry;
 		this._usersRegKey = DEFAULT_USERS_REGKEY;
 		this._activeUser = null;
+	}
+
+	public createApi(): IAuthenticationAPI {
+		const self = this;
+		return Object.freeze({
+			getUsernames() {
+				return self._registry.
+			},
+		} as IAuthenticationAPI);
 	}
 
 	public login(username: string, passwordHash: string): boolean {
