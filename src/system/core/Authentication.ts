@@ -20,10 +20,27 @@ export default class Authentication implements ISystemComponent<IAuthenticationA
 	public createApi(): IAuthenticationAPI {
 		const self = this;
 		return Object.freeze({
-			getUsernames() {
-				return self._registry.
+			getComponentDetails() {
+				return {
+					id: "authsvc",
+					name: "Authentication",
+					icon: "",
+					version: "1.0.0",
+				};
 			},
-		} as IAuthenticationAPI);
+
+			getUsernames() {
+				return self._registry.getGroupItems(self._usersRegKey);
+			},
+			getAdmins() {
+				// TODO: Evaluate admin statuses
+				return self._registry.getGroupItems(self._usersRegKey);
+			},
+			requestEscalation(stage) {
+				// TODO: Implement auth escalation
+				return false;
+			},
+		} satisfies IAuthenticationAPI) ;
 	}
 
 	public login(username: string, passwordHash: string): boolean {

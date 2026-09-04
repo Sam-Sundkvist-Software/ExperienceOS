@@ -9,7 +9,7 @@ export const DEFAULT_COMPACTION_THRESHOLD = 100;
 export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFileSystem {
 	private _compactFreelistThreshold: number;
 	private _nodeStore: INodeStore;
-	private _root: IDirectoryNode | null;
+	private _root: IDirectoryNode | undefined;
 
 	public constructor() {
 		this._compactFreelistThreshold = DEFAULT_COMPACTION_THRESHOLD;
@@ -19,25 +19,34 @@ export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFi
 			free: [],
 			freeHead: 0,
 		};
-		this._root = this.allocateNode({
-			type: "dir",
+		this._root = this._allocateNode({
+			type: FileSystemNodeType.DIRECTORY,
 			id: 0,
 			name: "",
 			parentId: -1,
 			children: {},
-		} as IDirectoryNode);
+		} satisfies IDirectoryNode);
 	}
 
 	public createApi(): IFileSystemAPI {
 		const self = this;
 		return Object.freeze({
+			getComponentDetails() {
+				return {
+					id: "expfs",
+					name: "ExperienceOS File System",
+					icon: "",
+					version: "1.0.0",
+				};
+			},
+
 			directoryExists(path) {
 				const stat = self.stat(path);
-				return !!stat && stat.type === "dir";
+				return !!stat && stat.type === FileSystemNodeType.DIRECTORY;
 			},
 			fileExists(path) {
 				const stat = self.stat(path);
-				return !!stat && stat.type === "file";
+				return !!stat && stat.type === FileSystemNodeType.FILE;
 			},
 			createDirectory(path, recurse = false) {
 				self.createDirectory(path, recurse);
@@ -49,7 +58,7 @@ export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFi
 			},
 			readDirectory(path) {
 				const dir = self.traverse(path);
-				if (!dir || dir.type !== "dir")
+				if (!dir || dir.type !== FileSystemNodeType.DIRECTORY)
 					throw new FileSystemError("Directory does not exist.");
 				return Object.keys((dir as IDirectoryNode).children);
 			},
@@ -62,39 +71,36 @@ export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFi
 			deleteFile(path) {
 				self.deleteFile(path);
 			},
-		} as IFileSystemAPI);
+		} satisfies IFileSystemAPI);
 	}
 
-	public traverse(path: string, cwd?: string): IFileSystemNode | null {
+	public traverse(path: string, cwd?: string): FileSystemNode | undefined {
 		const parts = path.split("/");
 		let current = cwd ? this.traverse(cwd) : this._root;
 
-		if (!current || current.type !== "dir") {
-			return null;
-		}
+		if (!current || current.type !== FileSystemNodeType.DIRECTORY)
+			return undefined;
 
 		for (const part of parts) {
-			if (!current) {
-				return null;
-			}
+			if (!current)
+				return undefined;
 
-			if (part === "" || part === ".") {
+			if (part === "" || part === ".")
 				continue;
-			} else if (part === "..") {
+			else if (part === "..")
 				current = this._nodeStore.nodes[current?.parentId];
-			} else {
-				current = this._nodeStore.nodes[(current as IDirectoryNode).children[part]];
-			}
+			else
+				current = this._nodeStore.nodes[(current as IDirectoryNode).children[part]!];
 		}
 
 		return current;
 	}
 
-	public stat(path: string): IFileSystemNodeStatistics | null {
+	public stat(path: string): IFileSystemNodeStatistics | undefined {
 		const node = this.traverse(path);
 
 		if (!node) {
-			return null;
+			return undefined;
 		}
 
 		return {
@@ -105,7 +111,7 @@ export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFi
 	public readFile(path: string): string {
 		const file = this.traverse(path);
 
-		if (!file || file.type !== "file") {
+		if (!file || file.type !== FileSystemNodeType.FILE) {
 			throw new FileSystemError("The specified path did not point to a valid file.");
 		}
 
@@ -113,39 +119,44 @@ export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFi
 	}
 
 	public writeFile(path: string, text: string): void {
-		const nodes = this.getNodesAlong(path);
+		const nodes = this._getNodesAlong(path);
 		const node = nodes[nodes.length - 1];
 
 		if (!node) {
-			throw new FileSystemError("Invalid path");
+			throw new FileSystemError("Invalid path.");
 		}
 
-		if (node.type === "dir") {
-
+		if (node.type !== FileSystemNodeType.FILE) {
+			throw new FileSystemError("Cannot replace object of different type.");
 		}
+
+		node.content = text;
 	}
 
 	public createDirectory(path: string, recurse: boolean): void {
 		// TODO: implement 'recurse'
 
-		const nodes = this.getNodesAlong(path);
+		const nodes = this._getNodesAlong(path);
 		const node = nodes[nodes.length - 1];
+		const segms = path.split("/");
+		const dn = segms[segms.length - 1];
 
-		if (!node) {
-			throw new FileSystemError("Invalid path");
-		}
+		if (dn === undefined || dn === "")
+			throw new FileSystemError("Invalid directory name.");
 
-		if (node.type !== "dir")
-			throw new FileSystemError("Target parent directory is invalid");
+		if (!node)
+			throw new FileSystemError("Invalid path.");
 
-		const newNode = this.allocateNode({
-			type: "dir",
+		if (node.type !== FileSystemNodeType.DIRECTORY)
+			throw new FileSystemError("Target parent directory is invalid.");
+
+		this._allocateNode({
+			type: FileSystemNodeType.DIRECTORY,
+			name: dn,
 			id: -1,
 			parentId: node.id,
 			children: {},
-		} as IDirectoryNode);
-
-		this.allocateNode(newNode);
+		} satisfies IDirectoryNode);
 	}
 
 	public deleteDirectory(path: string, recurse: boolean): void {
@@ -158,7 +169,7 @@ export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFi
 		throw new FileSystemError("File deletion not implemented.");
 	}
 
-	private getParentNodeOf(path: string): IFileSystemNode {
+	private _getParentNodeOf(path: string): FileSystemNode {
 		// TODO: implement
 		/*
 		 * example:
@@ -170,27 +181,27 @@ export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFi
 		throw new FileSystemError("NOT_IMPLEMENTED");
 	}
 
-	private getNodesAlong(path: string): IFileSystemNode[] {
+	private _getNodesAlong(path: string): FileSystemNode[] {
 		const parts = path.split("/");
-		const nodes: IFileSystemNode[] = [];
+		const nodes: FileSystemNode[] = [];
 
 		if (!this._root)
 			throw new FileSystemError("Cannot access root!");
 
-		let current: IFileSystemNode = this._root;
+		let current: FileSystemNode | undefined = this._root;
 
 		for (const part of parts) {
 			if (!current) {
 				return nodes;
 			}
 
-			let node: IFileSystemNode;
+			let node: FileSystemNode;
 			if (part === "" || part === ".") {
 				continue;
 			} else if (part === "..") {
-				node = this._nodeStore.nodes[current?.parentId];
+				node = this._nodeStore.nodes[current?.parentId]!;
 			} else {
-				node = this._nodeStore.nodes[(current as IDirectoryNode).children[part]];
+				node = this._nodeStore.nodes[(current as IDirectoryNode).children[part]!]!;
 			}
 
 			nodes.push(node);
@@ -200,10 +211,9 @@ export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFi
 		return nodes;
 	}
 
-	private allocateNode<T extends IFileSystemNode>(node: T): T {
+	private _allocateNode<T extends FileSystemNode>(node: T): T {
 		if (this._nodeStore.freeHead < this._nodeStore.free.length) {
-			const index = this._nodeStore.free[this._nodeStore.freeHead++];
-
+			const index = this._nodeStore.free[this._nodeStore.freeHead++]!;
 			this._nodeStore.nodes[index] = node;
 			node.id = index;
 
@@ -227,7 +237,7 @@ export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFi
 		return node;
 	}
 
-	private freeNode<T extends IFileSystemNode>(node: T): boolean {
+	private _freeNode<T extends FileSystemNode>(node: T): boolean {
 		if (this._nodeStore.nodes[node.id] !== node) {
 			return false;
 		}
@@ -244,7 +254,7 @@ export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFi
 		return true;
 	}
 
-	private assignNodeMetadata(
+	private _assignNodeMetadata(
 		node: IFileSystemNode,
 		owner?: string,
 		userPerm?: AccessString,
@@ -252,14 +262,14 @@ export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFi
 		othersPerm?: AccessString
 	): void {
 		const user: AccessString = userPerm ||
-			(node.type === "dir" ? "rwx" :
-			node.type === "file" ? "rw-" : "rw-");
+			(node.type === FileSystemNodeType.DIRECTORY ? "rwx" :
+			node.type === FileSystemNodeType.FILE ? "rw-" : "rw-");
 		const group: AccessString = groupPerm ||
-			(node.type === "dir" ? "r-x" :
-			node.type === "file" ? "r--" : "r--");
+			(node.type === FileSystemNodeType.DIRECTORY ? "r-x" :
+			node.type === FileSystemNodeType.FILE ? "r--" : "r--");
 		const others: AccessString = othersPerm ||
-			(node.type === "dir" ? "r-x" :
-			node.type === "file" ? "r--" : "r--");
+			(node.type === FileSystemNodeType.DIRECTORY ? "r-x" :
+			node.type === FileSystemNodeType.FILE ? "r--" : "r--");
 
 		const now = Date.now();
 
@@ -290,13 +300,13 @@ export interface IFileSystem {
 	 * Attempts to resolve the specified path to a file system node.
 	 * @returns The resolved node, or `null` if no valid node was found.
 	 */
-	traverse(path: string, cwd?: string): IFileSystemNode | null;
+	traverse(path: string, cwd?: string): FileSystemNode | undefined;
 
 	/**
 	 * Gets statistics of a file system node.
 	 * @returns Node statistics, or if the path does not point to a valid node, `null` is returned instead.
 	 */
-	stat(path: string): IFileSystemNodeStatistics | null;
+	stat(path: string): IFileSystemNodeStatistics | undefined;
 
 	/**
 	 * Reads the contents of a valid file and returns them as a string.
@@ -349,7 +359,11 @@ export interface IFileSystemNodeStatistics {
 	// Extend if necessary.
 }
 
-export type FileSystemNodeType = "file" | "dir" | "link";
+export enum FileSystemNodeType {
+	FILE,
+	DIRECTORY,
+	LINK,
+}
 
 /**
  * @deprecated
@@ -359,18 +373,18 @@ export type FileSystemNodeType = "file" | "dir" | "link";
 export const HLFileSystem = null;
 
 export interface INodeStore {
-	nodes: Record<number, IFileSystemNode>;
+	nodes: Record<number, FileSystemNode>;
 	free: number[];
 	counter: number;
 	freeHead: number;
-};
+}
 
 export interface INodeMetadata {
 	created: number;
 	modified: number;
 	owner: string;
 	permissions: IAccess;
-};
+}
 
 export interface IFileSystemNode {
 	type: FileSystemNodeType;
@@ -378,22 +392,24 @@ export interface IFileSystemNode {
 	name: string;
 	parentId: number;
 	meta?: INodeMetadata;
-};
+}
 
 export interface IFileNode extends IFileSystemNode {
-	type: "file";
+	type: FileSystemNodeType.FILE;
 	content: string; // for simplicity, for now.
 }
 
 export interface IDirectoryNode extends IFileSystemNode {
-	type: "dir";
+	type: FileSystemNodeType.DIRECTORY;
 	children: Record<string, number>;
 }
 
 export interface ILinkNode extends IFileSystemNode {
-	type: "link";
+	type: FileSystemNodeType.LINK;
 	dest: string;
 }
+
+export type FileSystemNode = IFileNode | IDirectoryNode | ILinkNode;
 
 type ReadFlag = "r" | "-";
 type WriteFlag = "w" | "-";

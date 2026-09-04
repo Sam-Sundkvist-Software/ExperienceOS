@@ -1,5 +1,5 @@
 import { IFileSystem } from "./FileSystem";
-import { IRegistryAPI } from "./ISystemAPI";
+import { IRegistryAPI, ISystemComponent } from "./ISystemAPI";
 
 export const DEFAULT_REGISTRY_PATH = "C:/System/sysconf.json";
 
@@ -17,10 +17,10 @@ export const DEFAULT_REGISTRY_PATH = "C:/System/sysconf.json";
  * Since the registry doesn't use working "groups" or "keys".
  */
 
-export default class Registry implements IRegistry {
+export default class Registry implements ISystemComponent<IRegistryAPI>, IRegistry {
 	private _fs: IFileSystem;
 	private _src: string;
-	private _cache: RegistryNode | undefined;
+	private _cache: RegistryObject | undefined;
 
 	public constructor(fs: IFileSystem) {
 		this._fs = fs;
@@ -31,6 +31,15 @@ export default class Registry implements IRegistry {
 	public createApi(): IRegistryAPI {
 		const self = this;
 		return Object.freeze({
+			getComponentDetails() {
+				return {
+					id: "systemct",
+					name: "SystemCT Registry",
+					icon: "",
+					version: "1.0.0",
+				};
+			},
+
 			groupExists(path) {
 				return self.groupExists(path)
 			},
@@ -46,13 +55,16 @@ export default class Registry implements IRegistry {
 			setValue(path, value) {
 				self.setNodeValue(path, value);
 			},
+			getGroupItems(path) {
+				return self.getGroupItems(path);
+			},
 			deleteGroup(path, recurse = false) {
 				self.deleteGroup(path, recurse);
 			},
 			deleteValue(path) {
 				self.deleteNode(path);
 			},
-		} as IRegistryAPI);
+		} satisfies IRegistryAPI);
 	}
 
 	public load(): void {
@@ -197,11 +209,11 @@ export default class Registry implements IRegistry {
 
 	private _traversePath(path: string): {
 		keysAlongPath: string[];
-		nodesAlongPath: (RegistryNode | undefined)[];
-		finalNode: RegistryNode | undefined;
+		nodesAlongPath: (RegistryObject | undefined)[];
+		finalNode: RegistryObject | undefined;
 	} {
 		const keys: string[] = [""];
-		const nodes: (RegistryNode | undefined)[] = [this._cache];
+		const nodes: (RegistryObject | undefined)[] = [this._cache];
 		const segments = path.split("/");
 
 		let current = this._cache;
@@ -246,17 +258,22 @@ export class RegistryError extends Error {
 	}
 }
 
-export interface IRegistryGroup {
-	type: RegistryNodeType.GROUP,
-	children: Record<string, RegistryNode>,
+export interface IRegistryObject {
+	type: RegistryNodeType;
 }
 
-export interface IRegistryNode<T = unknown> {
+export interface IRegistryGroup extends IRegistryObject {
+	type: RegistryNodeType.GROUP,
+	children: Record<string, RegistryObject>,
+}
+
+export interface IRegistryValue<T = unknown> extends IRegistryObject {
 	type: RegistryNodeType.VALUE,
 	value: T,
+	valueType?: string;
 }
 
-export type RegistryNode = IRegistryGroup | IRegistryNode;
+export type RegistryObject = IRegistryGroup | IRegistryValue;
 
 export enum RegistryNodeType {
 	GROUP,
