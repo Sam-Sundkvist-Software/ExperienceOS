@@ -160,7 +160,7 @@ export const VFS = (() => {
 	const resolvePath = (path: string) => {
 		if (!path || path === '' || path === '/') {
 			const root = storage.children["C:"];
-			if (root.type !== "dir")
+			if (root!.type !== "dir")
 				throw new Error("C: not found");
 			return root;
 		}
@@ -178,7 +178,7 @@ export const VFS = (() => {
 
 		for (const part of parts) {
 			if (current.type === "dir") {
-				current = current.children[part];
+				current = current.children[part]!;
 			} else {
 				return null;
 			}
@@ -249,7 +249,7 @@ export const VFS = (() => {
 				callback(p, n);
 				if (n.type === 'dir') {
 					for (const key in n.children) {
-						traverse(n.children[key], p + '/' + key);
+						traverse(n.children[key]!, p + '/' + key);
 					}
 				}
 			};

@@ -1,33 +1,59 @@
 import { IFileSystem } from "./FileSystem";
 import ISystemAPI from "./ISystemAPI";
+import { ILog } from "./Log";
 
 /**
  * The Application Dearchival Runtime (ADRT) for ExperienceOS.
  */
 export default class AppDRT implements IADRT {
 	private _fs: IFileSystem;
-	private _cache: Record<string, Promise<IAppProc>>;
+	private _log: ILog;
+	private _cache: Record<string, Promise<IRTApp>>;
 
-	public constructor(fs: IFileSystem) {
+	private _api: ISystemAPI | undefined;
+
+	public constructor(fs: IFileSystem, log: ILog) {
 		this._fs = fs;
+		this._log = log;
 		this._cache = {};
+		this._api = undefined;
 	}
 
-	public exec(path: string, args: unknown[]): unknown {
-		return this.load(new URL(window.location.origin))
+	public initApi(api: ISystemAPI) {
+		this._api = api;
 	}
 
-	private async load(externalUrl: URL): Promise<unknown> {
+	public exec(path: string, args: unknown[], requireApi = false): void {
+		if (!this._api) {
+			if (requireApi)
+				throw new ADRTError(`Application ${path} cannot start without the API.`);
+			this._log.writeWarning(`Application '${path}' may not function properly without the API.`);
+		}
+
+		this._load(new URL(path, window.location.origin)).then(app => {
+			// TODO: Add APP/PROC mgr
+			// and event log.
+			console.log("APP Launch", app.information);
+			app.start(this._api);
+		});
+	}
+
+	private async _load(externalUrl: URL): Promise<IRTApp> {
 		const key = externalUrl.href;
 
 		if (!this._cache[key]) {
-			this._cache[key] = (async() => {
-				const module = await import(
-					/* @vite-ignore */
-					key
-				);
-				return module.default as IAppProc;
-			})();
+			try {
+				this._cache[key] = (async() => {
+					const module = await import(
+						/* @vite-ignore */
+						key
+					);
+					return module.default as IRTApp;
+				})();
+			} catch (e) {
+				delete this._cache[key];
+				throw e;
+			}
 		}
 
 		return this._cache[key];
@@ -42,21 +68,11 @@ export class ADRTError extends Error {
 }
 
 export interface IADRT {
-	exec(path: string, args: unknown[]): void;
+	exec(path: string, args: unknown[], requireApi?: boolean): void;
 }
 
 export enum ProcState {
 	NONE = 0,
 	LOADED,
 	RUNNING,
-}
-
-export interface IAppProc {
-	onStart(api: ISystemAPI): void;
-	onQueryState(): IStateQueryResult;
-	onStop(): void;
-}
-
-export interface IStateQueryResult {
-	// TODO: Make useful
 }

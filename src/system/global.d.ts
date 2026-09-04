@@ -14,7 +14,7 @@ declare global {
 			icon?: string;
 		};
 
-		start(api: ISystemAPI): void;
+		start(api?: ISystemAPI): void;
 		stop(): void;
 		queryDetails?(): unknown;
 	}
