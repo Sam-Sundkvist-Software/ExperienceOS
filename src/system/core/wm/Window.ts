@@ -91,7 +91,7 @@ export default class Window {
 	}
 
 	close() {
-		
+		this.wh.closeWindow(this);
 	}
 
 	// THESE METHODS ARE J U N K:

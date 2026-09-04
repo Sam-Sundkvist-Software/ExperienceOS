@@ -1,4 +1,4 @@
-import { XpUser, XpUserPrivilege } from "../api";
+import createLegacySystemApi, { ILegacySystemAPI, XpUser, XpUserPrivilege } from "../api";
 import { CreateElementOptions } from "../compfwk";
 import Window from "./wm/Window";
 import Authentication, { IAuthentication } from "./Authentication";
@@ -7,6 +7,7 @@ import ISystemAPI from "./ISystemAPI";
 import Registry, { IRegistry } from "./Registry";
 import Utils from "./Utils";
 import WindowManager, { showLogonScreen } from "./wm/WindowManager";
+import createAdr, { IADR } from "../adr";
 
 export let API: ISystemAPI | undefined;
 
@@ -22,18 +23,29 @@ export default class Kernel implements IKernel {
 	private _wm: WindowManager; // TODO: Use shell/something. An interface at least.
 	private _auth: IAuthentication;
 
+	private _adr: IADR;
+	private _legacyApi: ILegacySystemAPI;
+
 	constructor(rootElement: HTMLElement) {
 		this._rootElement = rootElement;
 		this._fs = new FileSystem();
 		this._reg = new Registry(this._fs);
 		this._wm = new WindowManager(rootElement);
 		this._auth = new Authentication(this._reg);
+		this._adr = createAdr();
+		this._legacyApi = createLegacySystemApi(this._wm, this._fs);
 	}
 
 	public launch(): void {
 		const self = this;
 
-		showLogonScreen();
+		try {
+			this._wm.setupShell();
+		} catch (e) {
+			const err = e as Error;
+			console.log("=== (!) Kernel WMShellFault ===\n\n", err);
+		}
+		//showLogonScreen();
 
 		try {
 			API = (() => {
@@ -47,75 +59,9 @@ export default class Kernel implements IKernel {
 					hash(str) {
 						return Utils.hash(str);
 					},
-					Auth: {
-						login(username, password) {
-							return self._auth.login(username, password);
-						},
-						logout() {
-							self._auth.logout();
-						},
-						getCurrentUser() {
-							const userInfo = self._auth.getCurrentUserInfo();
-							if (!userInfo)
-								return null;
-							return {
-								username: userInfo.username,
-								passwordHash: "",
-								privilege: "admin",
-							};
-						},
-					},
-					UAC: {
-						checkPrivilege(required) {
-							void required;
-							return true;
-						},
-						requestEscalation(callback) {
-							callback(true);
-						},
-						requestEscalationAsync() {
-							return Promise.resolve(true);
-						},
-					},
-					FS: {
-						checkAccess(path, operation) {
-							return true;
-						},
-						readFile(path) {
-							return self._fs.readFile(path);
-						},
-						writeFile(path, content) {
-							self._fs.writeFile(path, content);
-							return undefined;
-						},
-						delete(path) {
-							// TODO: Add the bare minimum to FS API
-							void path;
-							return false;
-						},
-						ls(path) {
-							// TODO: Add the bare minimum to FS API
-							void path;
-							return null;
-						},
-					},
-					Registry: {
-						get(path) {
-							return self._reg.getNodeValue(path);
-						},
-						set(path, value) {
-							self._reg.setNodeValue(path, value);
-						},
-						delete(path) {
-							// TODO: Add the bare minimum to Reg API
-							void path;
-							return false;
-						},
-						getAll() {
-							// TODO: Remove this from the API
-							return null;
-						},
-					},
+					Auth: this._auth.createApi(),
+					FS: this._fs.createApi(),
+					Registry: this._reg.createApi(),
 					createElement<T extends keyof HTMLElementTagNameMap>(options: CreateElementOptions<T>) {
 						// TODO: Port Window manager
 						void options;

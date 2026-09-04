@@ -2,6 +2,44 @@
 const [getSelectedKey, setSelectedKey, subscribeKey] = FCCF.useState('System');
 const [getSidebarWidth, setSidebarWidth, subscribeSidebarWidth] = FCCF.useState(200);
 
+function genRegtree() {
+	const registry = XP_API.Registry.getAll();
+
+	function createTreeNode(text, value) {
+		if (value === null) {
+			return {
+				text: `${text} --- null`,
+			};
+		}
+
+		if (Array.isArray(value)) {
+			return {
+				text,
+				children: value.map((item, index) =>
+					createTreeNode(String(index), item)
+				),
+			};
+		}
+
+		if (typeof value === "object") {
+			return {
+				text,
+				children: Object.entries(value).map(([key, child]) =>
+					createTreeNode(key, child)
+				),
+			};
+		}
+
+		return {
+			text: `${text} --- ${value}`,
+		};
+	}
+
+	return createTreeNode("ROOT", registry);
+}
+
+const treeData = genRegtree();
+/*
 const treeData = [
 	{ text: 'HKEY_LOCAL_MACHINE', children: [
 		{ text: 'Software', children: [
@@ -16,6 +54,7 @@ const treeData = [
 		{ text: 'Apps' }
 	]}
 ];
+*/
 
 const tree = FCCF.Controls.Tree({
 	data: treeData,

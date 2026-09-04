@@ -1,6 +1,5 @@
-import { XpUser } from "../../api";
+import { legacySystemApi, XpUser, XpUserPrivilege } from "../../api";
 import { showContextMenu } from "../../compfwk";
-import { initDesktop } from "../../main";
 import IWindowHost, { WindowState } from "./IWindowHost";
 import Window, { WindowOptions } from "./Window";
 
@@ -21,58 +20,12 @@ export default class WindowManager implements IWindowHost {
 		this.activeWindowId = null;
 		this.baseZIndex = 100;
 
-		// setup shell (workaround)
-		// make better later, for now
-		// patch to make dynamic instead
-		// of hardcoded to index.html.
-		const desktopElement = document.createDocumentFragment();
-
-		const desktop = document.createElement("div");
-		desktop.id = "desktop";
-		desktop.innerHTML = `
-		<div id="desktop">
-			<div id="desktop-icons"></div>
-			
-			<!-- Start Menu -->
-			<div id="start-menu">
-				<div id="start-header">
-					<img src="https://picsum.photos/seed/user/40/40" alt="User" referrerPolicy="no-referrer">
-					<span>Administrator</span>
-				</div>
-				<div id="start-body">
-					<div id="start-left">
-						<!-- Pinned apps -->
-					</div>
-					<div id="start-right">
-						<div class="start-item">My Documents</div>
-						<div class="start-item">My Pictures</div>
-						<div class="start-item">My Music</div>
-						<hr>
-						<div class="start-item">My Computer</div>
-						<div class="start-item">Control Panel</div>
-					</div>
-				</div>
-				<div id="start-footer">
-					<div class="footer-btn">Log Off</div>
-					<div class="footer-btn">Turn Off Computer</div>
-				</div>
-			</div>
-
-			<!-- Taskbar -->
-			<div id="taskbar">
-				<button id="start-button">start</button>
-				<div id="task-items"></div>
-				<div id="system-tray">
-					<span id="clock">00:00 AM</span>
-				</div>
-			</div>
-		</div>`;
-
-		desktopElement.appendChild(desktop);
-		rootElement.appendChild(desktopElement);
-
 		// Disable default context menu
 		document.oncontextmenu = (ev) => ev.preventDefault();
+	}
+
+	public setupShell() {
+		this._setupShell();
 	}
 
 	public openWindow(options: WindowOptions): Window {
@@ -135,8 +88,8 @@ export default class WindowManager implements IWindowHost {
 			this.windows.splice(idxOf, 1);
 		}
 
-		if (this._activeWindowId === window.id)
-			this._activeWindowId = this.windows[this.windows.length - 1].id; // always works, and correctly sets itself to -1 if no other windows present, which is never true unless the desktop is fecked.
+		if (this._activeWindowId === window.id && this.windows.length > 0)
+			this._activeWindowId = this.windows[this.windows.length - 1]!.id; // always works, and correctly sets itself to -1 if no other windows present, which is never true unless the desktop is fecked.
 		
 		this.updateTaskbar();
 	}
@@ -236,7 +189,7 @@ export default class WindowManager implements IWindowHost {
 
 	public getById(id: number) {
 		for (let i = 0; i < this.windows.length; i++) {
-			if (this.windows[i].id === id)
+			if (this.windows[i]!.id === id)
 				return this.windows[i];
 		}
 
@@ -285,6 +238,322 @@ export default class WindowManager implements IWindowHost {
 
 			taskItems.appendChild(item);
 		});
+	}
+
+	private _setupShell() {
+		// setup shell (workaround)
+		// make better later, for now
+		// patch to make dynamic instead
+		// of hardcoded to index.html.
+		const desktopElement = document.createDocumentFragment();
+
+		const alertEl = document.createElement("div");
+		alertEl.id = "--betax-indev-msg";
+		Object.assign(alertEl.style, {
+			position: "absolute",
+			zIndex: "1000000",
+			left: "10px",
+			top: "10px",
+		} satisfies Partial<CSSStyleDeclaration>);
+		alertEl.innerHTML = `
+			<span style="color:white;">IN DEVELOPMENT</span>
+		`;
+		desktopElement.appendChild(alertEl);
+
+		const desktop = document.createElement("div");
+		desktop.id = "desktop";
+		desktop.innerHTML = `
+			<div id="desktop-icons"></div>
+			
+			<!-- Start Menu -->
+			<div id="start-menu">
+				<div id="start-header">
+					<img src="https://picsum.photos/seed/user/40/40" alt="User" referrerPolicy="no-referrer">
+					<span>Administrator</span>
+				</div>
+				<div id="start-body">
+					<div id="start-left">
+						<!-- Pinned apps -->
+					</div>
+					<div id="start-right">
+						<div class="start-item">My Documents</div>
+						<div class="start-item">My Pictures</div>
+						<div class="start-item">My Music</div>
+						<hr>
+						<div class="start-item">My Computer</div>
+						<div class="start-item">Control Panel</div>
+					</div>
+				</div>
+				<div id="start-footer">
+					<div class="footer-btn">Log Off</div>
+					<div class="footer-btn">Turn Off Computer</div>
+				</div>
+			</div>
+
+			<!-- Taskbar -->
+			<div id="taskbar">
+				<button id="start-button">start</button>
+				<div id="task-items"></div>
+				<div id="system-tray">
+					<span id="clock">00:00 AM</span>
+				</div>
+			</div>
+		`;
+		desktopElement.appendChild(desktop);
+		
+		this._rootElement.appendChild(desktopElement);
+		this._initDesktop();
+	}
+
+	private _initDesktop() {
+		// Load SCT Settings
+		const sct = legacySystemApi.getSCT<Record<string, unknown>>();
+		if (!sct)
+			throw new Error("SCT not available");
+		if (sct["Wallpaper"]) {
+			document.getElementById('desktop')!.style.backgroundImage = 'url(' + sct["Wallpaper"] + ')';
+		}
+		if (sct["TaskbarSize"]) {
+			document.getElementById('taskbar')!.style.height = sct["TaskbarSize"] + 'px';
+		}
+	
+		(window as any)["applyTheme"] = (themeName: string) => {
+			const themes: Record<string, { primary: string, light: string, dark: string, inactive: string }> = {
+				'Luna': { primary: '#0054e3', light: '#0058e6', dark: '#00309c', inactive: '#9db9eb' },
+				'Olive': { primary: '#738a5d', light: '#8ea375', dark: '#5a6b48', inactive: '#c5d0b9' },
+				'Silver': { primary: '#a0a0a0', light: '#b0b0b0', dark: '#808080', inactive: '#d0d0d0' }
+			};
+			const t = themes[themeName] || themes['Luna']!;
+			document.documentElement.style.setProperty('--xp-blue', t.primary);
+			document.documentElement.style.setProperty('--xp-blue-light', t.light);
+			document.documentElement.style.setProperty('--xp-blue-dark', t.dark);
+			document.documentElement.style.setProperty('--xp-inactive', t.inactive);
+			
+			// Update taskbar and start button colors too
+			document.getElementById('taskbar')!.style.background = 'linear-gradient(to bottom, ' + t.light + ' 0%, ' + t.primary + ' 100%)';
+			document.getElementById('start-button')!.style.background = 'linear-gradient(to bottom, #388e3c 0%, #4caf50 100%)'; // Keep start green
+		};
+		((window as any)["applyTheme"] as Function)?.(sct["Theme"]);
+	
+		(window as any)["restartExplorer"] = () => {
+			const sct = legacySystemApi.getSCT<Record<string, unknown>>();
+			if (!sct)
+				throw new Error("SCT not available");
+			if (sct["Wallpaper"]) {
+				document.getElementById('desktop')!.style.backgroundImage = 'url(' + sct["Wallpaper"] + ')';
+			}
+			if (sct["Theme"]) {
+				(window as any)["applyTheme"]?.(sct["Theme"]);
+			}
+			if (sct["TaskbarSize"]) {
+				document.getElementById('taskbar')!.style.height = sct["TaskbarSize"] + 'px';
+			}
+			updateClock(); // This will respect ShowClock
+			(window as any)["renderDesktop"]?.(); // TODO: find method
+			legacySystemApi.updateTaskbar();
+			legacySystemApi.showDialog({ title: 'System', message: 'Explorer has been restarted.' });
+		};
+	
+		// Clock update
+		function updateClock() {
+			const showClock = legacySystemApi.Registry.get<boolean>('System/ShowClock');
+			const clockEl = document.getElementById('clock')!;
+			if (!showClock) {
+				clockEl.style.display = 'none';
+				return;
+			}
+			clockEl.style.display = 'block';
+			
+			const now = new Date();
+			let hours = now.getHours();
+			let minutes: number | string = now.getMinutes();
+			const ampm = hours >= 12 ? 'PM' : 'AM';
+			hours = hours % 12;
+			hours = hours ? hours : 12;
+			minutes = minutes < 10 ? '0' + minutes : minutes;
+			document.getElementById('clock')!.innerText = hours + ':' + minutes + ' ' + ampm;
+		}
+		setInterval(updateClock, 1000);
+		updateClock();
+	
+		// Disable default context menu globally
+		document.addEventListener('contextmenu', (e) => {
+			if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+				e.preventDefault();
+			}
+		});
+	
+		// Start Menu Toggle
+		var startBtn = document.getElementById('start-button');
+		var startMenu = document.getElementById('start-menu');
+	
+		startBtn!.onclick = (ev) => {
+			ev.stopPropagation();
+			startMenu!.classList.toggle('open');
+		};
+	
+		document.onclick = () => {
+			startMenu!.classList.remove('open');
+		};
+	
+		startMenu!.onclick = (ev) => {
+			ev.stopPropagation();
+		};
+	
+		// Desktop Icons (Dynamic from VFS)
+		(window as any)["renderDesktop"] = () => {
+			legacySystemApi.exec('explorer', { mode: 'desktop' });
+		};
+		(window as any)["renderDesktop"]();
+	
+		// Desktop Context Menu
+		document.getElementById('desktop')!.oncontextmenu = (ev) => {
+			ev.preventDefault();
+			legacySystemApi.showContextMenu(ev.clientX, ev.clientY, [
+				{ text: 'Arrange Icons By', menu: [
+					{ text: 'Name' },
+					{ text: 'Size' },
+					{ text: 'Type' },
+					{ text: 'Modified' }
+				]},
+				{ text: 'Refresh', action: function() { (window as any)["renderDesktop"](); } },
+				{ separator: true },
+				{ text: 'Paste', action: function() { legacySystemApi.showDialog({ message: 'Nothing to paste.' }); } },
+				{ text: 'Paste Shortcut' },
+				{ separator: true },
+				{ text: 'New', menu: [
+					{ text: 'Folder', action: function() { legacySystemApi.FS.mkdir('C:/Desktop/New Folder');(window as any)["renderDesktop"](); } },
+					{ text: 'Shortcut' },
+					{ text: 'Text Document', action: function() { legacySystemApi.FS.writeFile('C:/Desktop/New Text Document.txt', ''); (window as any)["renderDesktop"](); } }
+				]},
+				{ separator: true },
+				{ text: 'Properties', action: function() { legacySystemApi.exec('displayProperties'); } }
+			]);
+		};
+	
+		// Antivirus Tray Icon
+		var avIcon = legacySystemApi.addTrayIcon({
+			title: 'CentralFirm Antivirus',
+			icon: 'https://img.icons8.com/color/48/000000/shield.png',
+			tooltip: {
+				icon: "https://img.icons8.com/color/48/000000/shield.png",
+				text: "CentralFirm Antivirus",
+			},
+			onClick: () => {
+				legacySystemApi.exec('antivirus');
+			}
+		});
+	
+		setTimeout(() => {
+			avIcon.showBalloon({
+				title: 'CentralFirm Antivirus',
+				message: 'Your computer is protected. No threats found.'
+			});
+		}, 2000);
+		const currentUser: XpUser = {
+			username: "__DEBUG",
+			passwordHash: "",
+			privilege: XpUserPrivilege.ADMIN,
+		};
+	
+		// Start Menu Header
+		const startHeader = document.getElementById('start-header')!;
+		startHeader.innerHTML = '<img src="' + currentUser.avatar + '" referrerPolicy="no-referrer"><span>' + currentUser.username + '</span>';
+	
+		// Start Menu Items (from C:/StartMenu)
+		const startLeft = document.getElementById('start-left')!;
+		startLeft.innerHTML = '';
+		var startMenuItems = legacySystemApi.FS.ls('C:/StartMenu');
+		if (startMenuItems)
+			startMenuItems.forEach(function(item) {
+				var path = 'C:/StartMenu/' + item;
+				var stat = legacySystemApi.FS.stat(path);
+				var iconUrl = legacySystemApi.getIcon(path);
+				
+				var div = legacySystemApi.createElement({
+					tag: "div",
+					className: 'start-item',
+					innerHTML: '<img src="' + iconUrl + '" referrerPolicy="no-referrer"><span>' + item.replace('.lnk', '') + '</span>',
+					onClick: () => {
+						legacySystemApi.exec(path);
+						startMenu!.classList.remove('open');
+					}
+				});
+				startLeft.appendChild(div);
+			});
+	
+		// Right side items
+		const startRight = document.getElementById('start-right')!;
+		startRight.innerHTML = '';
+		const rightItems = [
+			{ name: 'My Documents', action: function() { legacySystemApi.exec('explorer', ['C:/Documents']); } },
+			{ name: 'My Pictures', action: function() { legacySystemApi.showDialog({ message: 'My Pictures is empty.' }); } },
+			{ name: 'My Music', action: function() { legacySystemApi.showDialog({ message: 'My Music is empty.' }); } },
+			{ separator: true },
+			{ name: 'My Computer', action: function() { legacySystemApi.exec('explorer', ['C:']); } },
+			{ name: 'Control Panel', action: function() { legacySystemApi.exec('control'); } }
+		];
+	
+		rightItems.forEach((item) => {
+			if (item.separator) {
+				startRight.appendChild(legacySystemApi.createElement({ tag: 'hr' }));
+				return;
+			}
+			var div = legacySystemApi.createElement({
+				tag: "div",
+				className: 'start-item',
+				innerText: item.name,
+				onClick: function() {
+					item.action?.();
+					startMenu!.classList.remove('open');
+				}
+			});
+			startRight.appendChild(div);
+		});
+	
+		var runItem = legacySystemApi.createElement({
+			tag: "div",
+			className: 'start-item',
+			innerHTML: '<img src="https://img.icons8.com/color/48/000000/run-command.png" style="width:24px;height:24px;" referrerPolicy="no-referrer"><span>Run...</span>',
+			onClick: () => {
+				startMenu!.classList.remove('open');
+				legacySystemApi.showDialog({
+					type: 'prompt',
+					title: 'Run',
+					message: 'Type the name of a program, folder, document, or Internet resource, and ExperienceOS will open it for you.',
+					onOk: (cmd) => {
+						if (cmd) {
+							if ((cmd as string).indexOf('C:/') === 0) {
+								legacySystemApi.exec(cmd as string);
+							} else {
+								legacySystemApi.exec('C:/Apps/' + cmd + '.js');
+							}
+						}
+					}
+				});
+			}
+		});
+		startRight.appendChild(legacySystemApi.createElement({ tag: 'hr' }));
+		startRight.appendChild(runItem);
+	
+		// Footer buttons
+		var footerBtns = document.querySelectorAll('#start-footer .footer-btn') as NodeListOf<HTMLElement>;
+		footerBtns[0]!.onclick = () => { 
+			legacySystemApi.showDialog({ 
+				type: 'confirm', 
+				message: 'Are you sure you want to log off?', 
+				onOk: function() { legacySystemApi.Auth.logout(); } 
+			}); 
+		};
+		footerBtns[1]!.onclick = () => {
+			legacySystemApi.showDialog({ 
+				type: 'confirm', 
+				message: 'Turn off computer?', 
+				onOk: function() { document.body.innerHTML = '<div style="background:black;color:white;height:100vh;display:flex;align-items:center;justify-content:center;font-family:Tahoma;">It is now safe to turn off your computer.</div>'; } 
+			}); 
+		};
+	
+		console.log('XP Retro Desktop Initialized for ' + currentUser.username);
 	}
 
 	private _updateZIndices(): void {
@@ -505,7 +774,7 @@ export function showLogonScreen() {
 				if (user.username === 'Guest') {
 					if (/*XP_API.Auth.login('Guest', '')*/1) {
 						logon.remove();
-						initDesktop();
+						// TODO: Open desktop via WM
 					}
 				} else {
 					pwdArea.style.display = 'flex';
@@ -516,7 +785,7 @@ export function showLogonScreen() {
 			goBtn.onclick = function() {
 				if (/*XP_API.Auth.login(user.username, pwdInput.value)*/1) {
 					logon.remove();
-					initDesktop();
+					// TODO: Open desktop via WM
 				} else {
 					errorMsg.style.display = 'block';
 					pwdInput.value = '';
