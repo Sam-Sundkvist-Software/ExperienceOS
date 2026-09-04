@@ -38,6 +38,30 @@ export default class AppDRT implements IADRT {
 		});
 	}
 
+	private async _loadVfs(path: string): Promise<IRTApp> {
+		const key = "APPDRTexpOS://" + path;
+
+		if (this._cache[key])
+			return this._cache[key];
+
+		try {
+			return this._cache[key] = (async() => {
+				const textScript = this._fs.readFile(path);
+				const blob = new Blob([textScript], { type: "text/javascript" });
+				const url = URL.createObjectURL(blob);
+
+				try {
+					const module = await import(url);
+					return module.default as IRTApp;
+				} finally {
+					URL.revokeObjectURL(url);
+				}
+			})();
+		} catch {
+			throw new ADRTError("Cannot retrieve executable information.");
+		}
+	}
+
 	private async _load(externalUrl: URL): Promise<IRTApp> {
 		const key = externalUrl.href;
 
