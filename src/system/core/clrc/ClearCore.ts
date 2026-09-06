@@ -10,8 +10,8 @@ export default class ClearCore implements IClearCore {
 	}
 
 	public addApp(app: IClearCoreApp): string {
-		if (!app || !(app instanceof ClearCoreApp))
-			throw new ClearCoreError("App not supported.");
+		if (!app)
+			throw new ClearCoreError("Invalid app.");
 
 		const id = app.id;
 
