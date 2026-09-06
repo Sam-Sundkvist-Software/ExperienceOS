@@ -23,7 +23,7 @@ const appEntries = Object.fromEntries(
 
 export default defineConfig({
 	root: resolve(__dirname, "src"),
-	base: "./",
+	base: "/ExperienceOS/",
 	publicDir: false,
 	resolve: {
 		alias: {

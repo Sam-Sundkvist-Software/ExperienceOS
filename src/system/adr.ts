@@ -113,9 +113,13 @@ export default function createAdr() {
 			
 			if (!scriptText) {
 				// Try to fetch from server if not in VFS
-				const serverUrl = path.includes("/") ? path : `/apps/${path}.js`;
+				const url = new URL(
+					`${import.meta.env.BASE_URL}apps/${path}.js`,
+					window.location.origin
+				);
+
 				try {
-					const res = await fetch(serverUrl);
+					const res = await fetch(url);
 					if (!res.ok)
 						throw new Error("App not found on server");
 					scriptText = await res.text();
