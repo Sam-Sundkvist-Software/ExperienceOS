@@ -1,4 +1,4 @@
-import createLegacySystemApi, { ILegacySystemAPI, XpUser, XpUserPrivilege } from "../api";
+import createLegacySystemApi, { exposeLegacyApi, ILegacySystemAPI, XpUser, XpUserPrivilege } from "../api";
 import { CreateElementOptions } from "../compfwk";
 import Window from "./wm/Window";
 import Authentication, { IAuthentication } from "./Authentication";
@@ -33,7 +33,9 @@ export default class Kernel implements IKernel {
 		this._wm = new WindowManager(rootElement);
 		this._auth = new Authentication(this._reg, this._wm);
 		this._adr = createAdr();
-		this._legacyApi = createLegacySystemApi(this._wm, this._fs);
+		this._legacyApi = createLegacySystemApi(this._wm, this._fs, this._auth);
+
+		exposeLegacyApi();
 	}
 
 	public launch(): void {

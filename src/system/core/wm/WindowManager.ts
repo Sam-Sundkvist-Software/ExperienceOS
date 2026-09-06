@@ -356,12 +356,15 @@ export default class WindowManager implements IWindowHost {
 	
 		// Clock update
 		function updateClock() {
-			const showClock = legacySystemApi.Registry.get<boolean>('System/ShowClock');
+			//const showClock = legacySystemApi.Registry.get<boolean>('System/ShowClock');
+			const showClock = true;
 			const clockEl = document.getElementById('clock')!;
+
 			if (!showClock) {
 				clockEl.style.display = 'none';
 				return;
 			}
+			
 			clockEl.style.display = 'block';
 			
 			const now = new Date();

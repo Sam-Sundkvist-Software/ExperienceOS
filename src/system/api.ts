@@ -6,10 +6,11 @@ import { ADR } from "./adr";
 import { FCCF } from "./compfwk";
 import ISystemAPI from "./core/ISystemAPI";
 import { IFileSystem } from "./core/FileSystem";
+import { IAuthentication } from "./core/Authentication";
 
 export let legacySystemApi: ILegacySystemAPI;
 
-export default function createLegacySystemApi(wm: WindowManager, fs: IFileSystem) {
+export default function createLegacySystemApi(wm: WindowManager, fs: IFileSystem, auth: IAuthentication) {
 	const trayIcons = [];
 	let currentUser: XpUser | undefined;
 
@@ -25,43 +26,22 @@ export default function createLegacySystemApi(wm: WindowManager, fs: IFileSystem
 		},
 		Auth: {
 			login: (username: string, password: string) => {
-				const users = legacySystemApi.Registry.get("Security/Users") as Record<string, XpUser>;
-				const user = users[username];
-				if (!user)
-					return false;
-				
-				const pwdHash = password ? legacySystemApi.hash(password) : '';
-				// Special case for hardcoded hashes in VFS if I didn't update them correctly
-				// Administrator: 12345678 -> 25d55ad283aa400af464c76d713c07ad (MD5)
-				// User: 1234 -> 81dc9bdb52d04dc20036dbd8313ed055 (MD5)
-				// My simple hash for 1234 is "1a0022", for 12345678 is "2f6a666"
-				// I will allow both for now or just update VFS
-				
-				if (user.passwordHash === pwdHash || (username === "Guest" && user.passwordHash === '')) {
-					currentUser = user;
-					legacySystemApi.Registry.set("Security/CurrentSession", username);
-					return true;
-				}
-
-				return false;
+				return auth.login(username, password);
 			},
 			logout: () => {
-				currentUser = undefined;
-				legacySystemApi.Registry.set("Security/CurrentSession", null);
-				location.reload();
+				auth.logout();
 			},
 			getCurrentUser: () => {
-				if (!currentUser) {
-					const session = legacySystemApi.Registry.get<string>("Security/CurrentSession");
-					if (session) {
-						const users = legacySystemApi.Registry.get<Record<string, XpUser>>('Security/Users');
-						if (!users) {
-							throw new Error("Registry Corruption! Users could not be enumerated");
-						}
-						currentUser = users[session];
-					}
-				}
-				return currentUser;
+				const userInfo = auth.getCurrentUserInfo();
+
+				if (!userInfo)
+					return undefined;
+
+				return {
+					username: userInfo?.username,
+					passwordHash: "", // TODO: Why the actual F would an app need this?
+					privilege: XpUserPrivilege.ADMIN,
+				};
 			}
 		},
 		UAC: {
@@ -81,6 +61,9 @@ export default function createLegacySystemApi(wm: WindowManager, fs: IFileSystem
 				}
 
 				// Dim overlay
+				// buggy, don't
+				// TODO: remove
+				/*
 				const overlay = document.createElement('div');
 				overlay.style.position = 'fixed';
 				overlay.style.top = '0';
@@ -90,6 +73,7 @@ export default function createLegacySystemApi(wm: WindowManager, fs: IFileSystem
 				overlay.style.background = 'rgba(0,0,0,0.5)';
 				overlay.style.zIndex = '9999';
 				document.body.appendChild(overlay);
+				*/
 
 				const container = legacySystemApi.createElement({
 					tag: "div",
@@ -103,6 +87,7 @@ export default function createLegacySystemApi(wm: WindowManager, fs: IFileSystem
 						boxSizing: 'border-box'
 					}
 				});
+
 				container.innerHTML = 
 					'<div style="display:flex;gap:15px;align-items:center;">' +
 						'<img src="https://img.icons8.com/color/48/000000/shield.png" style="width:48px;height:48px;" referrerPolicy="no-referrer">' +
@@ -148,7 +133,7 @@ export default function createLegacySystemApi(wm: WindowManager, fs: IFileSystem
 				
 				let winId: number;
 				const cleanup = () => {
-					overlay.remove();
+					//overlay.remove();
 					legacySystemApi.closeWindow(winId);
 				};
 
@@ -752,6 +737,10 @@ export default function createLegacySystemApi(wm: WindowManager, fs: IFileSystem
 			return winId;
 		}
 	});
+}
+
+export function exposeLegacyApi() {
+	(window as any)["legacyApi"] = legacySystemApi;
 }
 
 export interface ILegacySystemAPI {
