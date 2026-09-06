@@ -150,15 +150,15 @@ export class ClearCoreApp implements IClearCoreApp {
 	public invokeActionFunction(id: string, ...args: unknown[]): unknown {
 		const func = this._actionFunctions[id];
 
-		if (!func || typeof func !== "function")
-			throw new ClearCoreError("A function by the provided id does not exist or is invalid.");
+		if (!func)
+			throw new ClearCoreError("A function by the provided id does not exist.");
 
 		return func(...args);
 	}
 
 	public actionFunctionExists(id: string): boolean {
 		const func = this._actionFunctions[id];
-		return !!func && typeof func === "function";
+		return !!func;
 	}
 }
 
