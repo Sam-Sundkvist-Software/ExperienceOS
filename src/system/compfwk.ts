@@ -68,8 +68,8 @@ export function createElement<T extends keyof HTMLElementTagNameMap>(options: Cr
 		el.oncontextmenu = (ev) => {
 			ev.preventDefault();
 			ev.stopPropagation();
-			if (options.contextMenu)
-				showContextMenu(ev.clientX, ev.clientY, options.contextMenu || []);
+			
+			showContextMenu(ev.clientX, ev.clientY, options.contextMenu || []);
 		};
 	}
 

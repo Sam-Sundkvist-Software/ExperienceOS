@@ -35,13 +35,13 @@ Master Plan: ExperienceOS
 	Provides simple and intuitive controls to create gorgeous, native user interfaces for ExperienceOS. Raw HTML should not be used, as the ECCF has OS-native styles in use readily.
 	
 	**Alternatives**
-	Consider using the ClearBatch UI Framework instead.
+	Consider using the ClearCore UI Framework instead.
 
-4.	ClearBatch
-	----------
+4.	ClearCore
+	---------
 	**Details**
-	Id			clearb
-	Name		ClearBatch UI Framework
+	Id			clrc
+	Name		ClearCore UI Framework
 	Version		0.1
 	Author		Samsoft
 	
