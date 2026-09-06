@@ -1,4 +1,4 @@
-import { XP_API, XpUser } from "./api";
+import { legacySystemApi, XpUser } from "./api";
 import Kernel, { IKernel } from "./core/Kernel";
 import { showLogonScreen } from "./core/wm/WindowManager";
 
@@ -30,7 +30,7 @@ export default class Boot implements IBoot {
 	}
 
 	private loadSettings(): boolean {
-		const users = XP_API.Registry.get<Record<string, XpUser>>("Security/Users");
+		const users = legacySystemApi.Registry.get<Record<string, XpUser>>("Security/Users");
 
 		if (!users)
 			return false;
@@ -42,8 +42,8 @@ export default class Boot implements IBoot {
 		window.addEventListener("error", (ev) => {
 			console.error("expOS ERROR: " + ev.message);
 
-			if (XP_API !== undefined && XP_API.showDialog !== undefined) {
-				XP_API.showDialog({
+			if (legacySystemApi !== undefined && legacySystemApi.showDialog !== undefined) {
+				legacySystemApi.showDialog({
 					title: "System Error",
 					type: "error",
 					message: `Message: '${ev.message}'`,
@@ -56,8 +56,8 @@ export default class Boot implements IBoot {
 		window.addEventListener("unhandledrejection", (ev) => {
 			console.error("expOS ASYNC ERROR: " + ev.reason);
 
-			if (XP_API !== undefined && XP_API.showDialog !== undefined) {
-				XP_API.showDialog({
+			if (legacySystemApi !== undefined && legacySystemApi.showDialog !== undefined) {
+				legacySystemApi.showDialog({
 					title: "System Warning",
 					type: "warning",
 					message: `Asynchronous process failed: '${ev.reason}'`,
