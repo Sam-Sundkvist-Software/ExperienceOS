@@ -1,3 +1,4 @@
+import WindowManager from "./wm/WindowManager";
 import { IAuthenticationAPI, ISystemComponent } from "./ISystemAPI";
 import { IRegistry } from "./Registry";
 
@@ -8,11 +9,14 @@ export const DEFAULT_USERS_REGKEY = "System/Users";
  */
 export default class Authentication implements ISystemComponent<IAuthenticationAPI>, IAuthentication {
 	private _registry: IRegistry;
+	private _windowManager: WindowManager;
+
 	private _usersRegKey: string;
 	private _activeUser: IUserData | null;
 
-	public constructor(registry: IRegistry) {
+	public constructor(registry: IRegistry, windowManager: WindowManager) {
 		this._registry = registry;
+		this._windowManager = windowManager;
 		this._usersRegKey = DEFAULT_USERS_REGKEY;
 		this._activeUser = null;
 	}
