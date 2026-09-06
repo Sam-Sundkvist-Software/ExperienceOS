@@ -29,8 +29,12 @@ export default class Kernel implements IKernel {
 	constructor(rootElement: HTMLElement) {
 		this._rootElement = rootElement;
 		this._fs = new FileSystem();
+		(window as any)["expFS"] = this._fs;
+		this._fs.createDirectory("/System", false);
+		this._fs.writeFile("/System/configuration.sct", "");
 		this._reg = new Registry(this._fs);
-		this._wm = new WindowManager(rootElement);
+		this._reg.load();
+		this._wm = new WindowManager(rootElement, this._reg);
 		this._auth = new Authentication(this._reg, this._wm);
 		this._adr = createAdr();
 		this._legacyApi = createLegacySystemApi(this._wm, this._fs, this._auth);

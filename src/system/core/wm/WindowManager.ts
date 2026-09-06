@@ -1,5 +1,6 @@
 import { legacySystemApi, XpUser, XpUserPrivilege } from "../../api";
 import { showContextMenu } from "../../compfwk";
+import { IRegistry } from "../Registry";
 import IWindowHost, { WindowState } from "./IWindowHost";
 import Window, { WindowOptions } from "./Window";
 
@@ -7,14 +8,17 @@ export default class WindowManager implements IWindowHost {
 	private static _windowCounter: number = 0;
 
 	private _rootElement: HTMLElement;
+	private _reg: IRegistry;
+
 	private _activeWindowId: number;
 
 	public windows: Window[];
 	public activeWindowId: string | null;
 	public baseZIndex: number;
 
-	public constructor(rootElement: HTMLElement) {
+	public constructor(rootElement: HTMLElement, reg: IRegistry) {
 		this._rootElement = rootElement;
+		this._reg = reg;
 		this._activeWindowId = -1;
 		this.windows = [];
 		this.activeWindowId = null;
@@ -240,100 +244,138 @@ export default class WindowManager implements IWindowHost {
 		});
 	}
 
+	private _shell: {
+		desktopElement: HTMLElement;
+		desktopIconsElement: HTMLElement;
+		startMenuElement: HTMLElement;
+		taskbarElement: HTMLElement;
+	} | undefined;
+
 	private _setupShell() {
-		// setup shell (workaround)
-		// make better later, for now
-		// patch to make dynamic instead
-		// of hardcoded to index.html.
-		const desktopElement = document.createDocumentFragment();
+		const desktopFragment = document.createDocumentFragment();
 
-		const alertEl = document.createElement("div");
-		alertEl.id = "--betax-indev-msg";
-		Object.assign(alertEl.style, {
-			position: "absolute",
-			zIndex: "1000000",
-			left: "10px",
-			top: "10px",
-		} satisfies Partial<CSSStyleDeclaration>);
-		alertEl.innerHTML = `
-			<span style="color:white;">IN DEVELOPMENT</span>
-		`;
-		desktopElement.appendChild(alertEl);
+		const desktopElement = document.createElement("div");
+		desktopElement.id = "desktop";
+		desktopElement.className = "desktop";
 
-		const desktop = document.createElement("div");
-		desktop.id = "desktop";
-		desktop.innerHTML = `
-			<div id="desktop-icons"></div>
-			
-			<!-- Start Menu -->
-			<div id="start-menu">
-				<div id="start-header">
-					<img src="https://picsum.photos/seed/user/40/40" alt="User" referrerPolicy="no-referrer">
-					<span>Administrator</span>
+		const desktopIconsElement = document.createElement("div");
+		desktopIconsElement.id = "desktop-icons";
+		desktopIconsElement.className = "desktop-icons";
+
+		desktopElement.appendChild(desktopIconsElement);
+
+		const startMenuElement = document.createElement("div");
+		startMenuElement.id = "start-menu";
+		startMenuElement.className = "start-menu";
+		startMenuElement.innerHTML = `
+			<div id="start-header">
+				<img src="https://picsum.photos/seed/user/40/40" alt="User" referrerPolicy="no-referrer">
+				<span>Administrator</span>
+			</div>
+			<div id="start-body">
+				<div id="start-left">
+					<!-- Pinned apps -->
 				</div>
-				<div id="start-body">
-					<div id="start-left">
-						<!-- Pinned apps -->
-					</div>
-					<div id="start-right">
-						<div class="start-item">My Documents</div>
-						<div class="start-item">My Pictures</div>
-						<div class="start-item">My Music</div>
-						<hr>
-						<div class="start-item">My Computer</div>
-						<div class="start-item">Control Panel</div>
-					</div>
-				</div>
-				<div id="start-footer">
-					<div class="footer-btn">Log Off</div>
-					<div class="footer-btn">Turn Off Computer</div>
+				<div id="start-right">
+					<div class="start-item">My Documents</div>
+					<div class="start-item">My Pictures</div>
+					<div class="start-item">My Music</div>
+					<hr>
+					<div class="start-item">My Computer</div>
+					<div class="start-item">Control Panel</div>
 				</div>
 			</div>
-
-			<!-- Taskbar -->
-			<div id="taskbar">
-				<button id="start-button">start</button>
-				<div id="task-items"></div>
-				<div id="system-tray">
-					<span id="clock">00:00 AM</span>
-				</div>
+			<div id="start-footer">
+				<div class="footer-btn">Log Off</div>
+				<div class="footer-btn">Turn Off Computer</div>
 			</div>
 		`;
-		desktopElement.appendChild(desktop);
+
+		desktopElement.appendChild(startMenuElement);
+
+		const taskbarElement = document.createElement("div");
+		taskbarElement.id = "taskbar"
+		taskbarElement.className = "taskbar";
+		taskbarElement.innerHTML = `
+			<button id="start-button" class="start-button">start</button>
+			<div id="task-items"></div>
+			<div id="system-tray">
+				<span id="clock">00:00 AM</span>
+			</div>
+		`;
+
+		desktopElement.appendChild(taskbarElement);
+
+		desktopFragment.appendChild(desktopElement);
+
+		this._shell = {
+			desktopElement,
+			desktopIconsElement,
+			startMenuElement,
+			taskbarElement,
+		};
 		
-		this._rootElement.appendChild(desktopElement);
+		this._rootElement.appendChild(desktopFragment);
 		this._initDesktop();
 	}
 
+	private _createStartMenu() {
+
+	}
+
 	private _initDesktop() {
+		const shell = this._shell;
+
+		if (!shell)
+			throw new Error("Shell not initialized successfully.");
+
 		// Load SCT Settings
 		const sct = legacySystemApi.getSCT<Record<string, unknown>>();
 		if (!sct)
 			throw new Error("SCT not available");
-		if (sct["Wallpaper"]) {
-			document.getElementById('desktop')!.style.backgroundImage = 'url(' + sct["Wallpaper"] + ')';
-		}
-		if (sct["TaskbarSize"]) {
-			document.getElementById('taskbar')!.style.height = sct["TaskbarSize"] + 'px';
-		}
-	
-		(window as any)["applyTheme"] = (themeName: string) => {
+
+		const wallpaperRegKey = "Shell/Wallpaper";
+		let wallpaper: string;
+		if (this._reg.nodeExists(wallpaperRegKey))
+			wallpaper = this._reg.getNodeValue(wallpaperRegKey);
+		else
+			wallpaper = "about:blank";
+
+		shell.desktopElement.style.backgroundImage = `url(${wallpaper})`;
+
+		const taskbarHeightRegKey = "Shell/TaskbarHeight";
+		let taskbarHeight: number;
+		if (this._reg.nodeExists(taskbarHeightRegKey))
+			taskbarHeight = this._reg.getNodeValue(taskbarHeightRegKey);
+		else
+			taskbarHeight = 30;
+		
+		shell.taskbarElement.style.height = `${taskbarHeight}px`;
+
+		function applyTheme(themeName: string) {
 			const themes: Record<string, { primary: string, light: string, dark: string, inactive: string }> = {
-				'Luna': { primary: '#0054e3', light: '#0058e6', dark: '#00309c', inactive: '#9db9eb' },
-				'Olive': { primary: '#738a5d', light: '#8ea375', dark: '#5a6b48', inactive: '#c5d0b9' },
-				'Silver': { primary: '#a0a0a0', light: '#b0b0b0', dark: '#808080', inactive: '#d0d0d0' }
+				"Luna": { primary: '#0054e3', light: '#0058e6', dark: '#00309c', inactive: '#9db9eb' },
+				"Olive": { primary: '#738a5d', light: '#8ea375', dark: '#5a6b48', inactive: '#c5d0b9' },
+				"Silver": { primary: '#a0a0a0', light: '#b0b0b0', dark: '#808080', inactive: '#d0d0d0' }
 			};
 			const t = themes[themeName] || themes['Luna']!;
-			document.documentElement.style.setProperty('--xp-blue', t.primary);
-			document.documentElement.style.setProperty('--xp-blue-light', t.light);
-			document.documentElement.style.setProperty('--xp-blue-dark', t.dark);
-			document.documentElement.style.setProperty('--xp-inactive', t.inactive);
-			
-			// Update taskbar and start button colors too
-			document.getElementById('taskbar')!.style.background = 'linear-gradient(to bottom, ' + t.light + ' 0%, ' + t.primary + ' 100%)';
-			document.getElementById('start-button')!.style.background = 'linear-gradient(to bottom, #388e3c 0%, #4caf50 100%)'; // Keep start green
-		};
-		((window as any)["applyTheme"] as Function)?.(sct["Theme"]);
+			document.documentElement.style.setProperty("--xp-blue", t.primary);
+			document.documentElement.style.setProperty("--xp-blue-light", t.light);
+			document.documentElement.style.setProperty("--xp-blue-dark", t.dark);
+			document.documentElement.style.setProperty("--xp-inactive", t.inactive);
+
+			shell!.taskbarElement.style.backgroundImage = `linear-gradient(to bottom, ${t.light} 0%, ${t.primary} 100%)`;
+			(shell!.taskbarElement.querySelector(".start-button") as HTMLElement).style.backgroundImage = `linear-gradient(to bottom, #388e3c 0%, #4caf50 100%)`;
+		}
+
+		const themeRegKey = "Shell/Theme";
+		let theme: string;
+		if (this._reg.nodeExists(themeRegKey))
+			theme = this._reg.getNodeValue(themeRegKey);
+		else
+			theme = "Luna";
+
+		applyTheme(theme);
 	
 		(window as any)["restartExplorer"] = () => {
 			const sct = legacySystemApi.getSCT<Record<string, unknown>>();

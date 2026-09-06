@@ -1,7 +1,7 @@
 import { IFileSystem } from "./FileSystem";
 import { IRegistryAPI, ISystemComponent } from "./ISystemAPI";
 
-export const DEFAULT_REGISTRY_PATH = "C:/System/sysconf.json";
+export const DEFAULT_REGISTRY_PATH = "/System/configuration.sct";
 
 /*
  * Registry Path Format:
