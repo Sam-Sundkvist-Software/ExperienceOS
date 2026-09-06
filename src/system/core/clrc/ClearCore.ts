@@ -3,10 +3,35 @@
  * The improved central (UI) component framework for ExperienceOS.
  */
 export default class ClearCore implements IClearCore {
+	private _loadingApps: { [path: string]: Promise<void>; };
 	private _apps: { [id: string]: IClearCoreApp; };
 
 	public constructor() {
+		this._loadingApps = {};
 		this._apps = {};
+	}
+
+	public loadApp(url: URL): Promise<void> {
+		if (!url)
+			throw new ClearCoreError("Invalid URL.");
+
+		const filePath = url.href;
+		const existing = this._loadingApps[filePath];
+
+		if (existing)
+			return existing;
+
+		return (this._loadingApps[filePath] = (async() => {
+			try {
+				const data = await import(filePath);
+				const config = data.default as IClearCoreAppConfig;
+				const app = new ClearCoreApp(config);
+				
+				this.addApp(app);
+			} finally {
+				delete this._loadingApps[filePath];
+			}
+		})());
 	}
 
 	public addApp(app: IClearCoreApp): string {
@@ -71,6 +96,7 @@ export interface IClearCore {
 	 * Adds an app to the ClearCore database.
 	 * @returns The app ID.
 	 */
+	loadApp(url: URL): void;
 	addApp(app: IClearCoreApp): string;
 	removeApp(id: string): void;
 	startApp(id: string): void;
