@@ -24,8 +24,12 @@ export default class ClearCore implements IClearCore {
 	}
 
 	public removeApp(id: string): void {
-		if (!this._apps[id])
+		const app = this._apps[id];
+
+		if (!app)
 			return;
+
+		app.stop();
 
 		delete this._apps[id];
 	}
