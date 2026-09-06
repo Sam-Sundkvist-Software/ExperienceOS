@@ -88,7 +88,7 @@ export class ClearCoreError extends Error {
 
 export class ClearCoreApp implements IClearCoreApp {
 	private _config: IClearCoreAppConfig;
-	private _actionFunctions: { [id: string]: (...args: unknown[]) => void; }
+	private _actionFunctions: { [id: string]: (...args: unknown[]) => unknown; }
 
 	private _id: string;
 	private _isRunning: boolean;
