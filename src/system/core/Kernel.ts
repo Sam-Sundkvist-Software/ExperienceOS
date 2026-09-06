@@ -31,7 +31,7 @@ export default class Kernel implements IKernel {
 		this._fs = new FileSystem();
 		this._reg = new Registry(this._fs);
 		this._wm = new WindowManager(rootElement);
-		this._auth = new Authentication(this._reg);
+		this._auth = new Authentication(this._reg, this._wm);
 		this._adr = createAdr();
 		this._legacyApi = createLegacySystemApi(this._wm, this._fs);
 	}

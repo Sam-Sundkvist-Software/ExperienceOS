@@ -168,7 +168,7 @@ export default class WindowManager implements IWindowHost {
 		this.updateTaskbar();
 	}
 
-	create(options: WindowOptions) {
+	public create(options: WindowOptions) {
 		options.wh = this;
 		const win = new Window(options);
 		win.id = this._generateWindowId();
@@ -405,10 +405,18 @@ export default class WindowManager implements IWindowHost {
 			legacySystemApi.exec('explorer', { mode: 'desktop' });
 		};
 		(window as any)["renderDesktop"]();
+
+		const desktop = document.querySelector("#desktop");
+
+		if (!desktop || !(desktop instanceof HTMLElement))
+			throw new Error("Desktop could not be found or it was invalid.");
 	
 		// Desktop Context Menu
-		document.getElementById('desktop')!.oncontextmenu = (ev) => {
+		desktop.oncontextmenu = (ev) => {
+			if (ev.target !== desktop)
+				return;
 			ev.preventDefault();
+			ev.stopPropagation();
 			legacySystemApi.showContextMenu(ev.clientX, ev.clientY, [
 				{ text: 'Arrange Icons By', menu: [
 					{ text: 'Name' },
