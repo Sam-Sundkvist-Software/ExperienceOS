@@ -28,10 +28,6 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"@": resolve(__dirname, "src"),
-			"@apps": resolve(__dirname, "src/apps"),
-			"@system": resolve(__dirname, "src/system"),
-			"@data": resolve(__dirname, "src/data"),
-			"@theme": resolve(__dirname, "src/theme"),
 		},
 	},
 	build: {

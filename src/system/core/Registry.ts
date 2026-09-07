@@ -1,7 +1,8 @@
 import { IFileSystem } from "./FileSystem";
 import { IRegistryAPI, ISystemComponent } from "./ISystemAPI";
+import registryImage from "@/data/registryImage.json";
 
-export const DEFAULT_REGISTRY_PATH = "/System/configuration.sct";
+export const DEFAULT_REGISTRY_PATH = "C:/System/configuration.sct";
 
 /*
  * Registry Path Format:
@@ -26,6 +27,84 @@ export default class Registry implements ISystemComponent<IRegistryAPI>, IRegist
 		this._fs = fs;
 		this._src = DEFAULT_REGISTRY_PATH;
 		this._cache = undefined;
+	}
+
+	private _throwIfUnloaded() {
+		if (!this._cache)
+			throw new RegistryError("Registry not loaded.");
+		if (this._cache.type !== RegistryNodeType.GROUP)
+			throw new RegistryError("Invalid registry root.");
+	}
+
+	private _createGroup(path: string, recurse: boolean): IRegistryGroup {
+		const {
+			keysAlongPath,
+			nodesAlongPath,
+		} = this._traversePath(path);
+
+		for (let i = 0; i < nodesAlongPath.length; i++) {
+			const node = nodesAlongPath[i];
+
+			if (!node) {
+				const prev = nodesAlongPath[i - 1];
+
+				if (!prev || prev.type !== RegistryNodeType.GROUP)
+					throw new RegistryError("Cannot create group inside non-group.");
+
+				if (i < nodesAlongPath.length - 1 && !recurse)
+					throw new RegistryError("Cannot reach target group.");
+
+				nodesAlongPath[i] = prev.children[keysAlongPath[i]!] = {
+					type: RegistryNodeType.GROUP,
+					children: {},
+				};
+			}
+		}
+
+		return nodesAlongPath[nodesAlongPath.length - 1] as IRegistryGroup;
+	}
+
+	private _traversePath(path: string): {
+		keysAlongPath: string[];
+		nodesAlongPath: (RegistryObject | undefined)[];
+		finalNode: RegistryObject | undefined;
+	} {
+		const keys: string[] = [""];
+		const nodes: (RegistryObject | undefined)[] = [this._cache];
+		const segments = path.split("/");
+
+		let current = this._cache;
+
+		loop: for (let i = 0; i < segments.length; i++) {
+			const segment = segments[i]!;
+
+			switch (segment) {
+				case "":
+				case ".":
+					break;
+				case "..": {
+					if (nodes.length > 1)
+						current = nodes[nodes.length - 2];
+				} break;
+				default: {
+					if (current && current.type === RegistryNodeType.GROUP) {
+						const child = current.children[segment];
+						current = child;
+					}
+				} break;
+			}
+
+			if (segment !== "") {
+				keys.push(segment);
+				nodes.push(current);
+			}
+		}
+
+		return {
+			keysAlongPath: keys,
+			nodesAlongPath: nodes,
+			finalNode: nodes[nodes.length - 1],
+		};
 	}
 
 	public createApi(): IRegistryAPI {
@@ -71,7 +150,8 @@ export default class Registry implements ISystemComponent<IRegistryAPI>, IRegist
 		try {
 			this._cache = JSON.parse(this._fs.readFile(this._src));
 		} catch {
-			throw new RegistryError("Cannot access source file or source file is malformed.");
+			console.warn("Cannot access source file or source file is malformed.");
+			this._cache = registryImage as RegistryObject;
 		}
 	}
 
@@ -171,84 +251,6 @@ export default class Registry implements ISystemComponent<IRegistryAPI>, IRegist
 		// TODO: Implement
 		throw new RegistryError("Node deletion not implemented.");
 	}
-
-	private _throwIfUnloaded() {
-		if (!this._cache)
-			throw new RegistryError("Registry not loaded.");
-		if (this._cache.type !== RegistryNodeType.GROUP)
-			throw new RegistryError("Invalid registry root.");
-	}
-
-	private _createGroup(path: string, recurse: boolean): IRegistryGroup {
-		const {
-			keysAlongPath,
-			nodesAlongPath,
-		} = this._traversePath(path);
-
-		for (let i = 0; i < nodesAlongPath.length; i++) {
-			const node = nodesAlongPath[i];
-
-			if (!node) {
-				const prev = nodesAlongPath[i - 1];
-
-				if (!prev || prev.type !== RegistryNodeType.GROUP)
-					throw new RegistryError("Cannot create group inside non-group.");
-
-				if (i < nodesAlongPath.length - 1 && !recurse)
-					throw new RegistryError("Cannot reach target group.");
-
-				nodesAlongPath[i] = prev.children[keysAlongPath[i]!] = {
-					type: RegistryNodeType.GROUP,
-					children: {},
-				};
-			}
-		}
-
-		return nodesAlongPath[nodesAlongPath.length - 1] as IRegistryGroup;
-	}
-
-	private _traversePath(path: string): {
-		keysAlongPath: string[];
-		nodesAlongPath: (RegistryObject | undefined)[];
-		finalNode: RegistryObject | undefined;
-	} {
-		const keys: string[] = [""];
-		const nodes: (RegistryObject | undefined)[] = [this._cache];
-		const segments = path.split("/");
-
-		let current = this._cache;
-
-		loop: for (let i = 0; i < segments.length; i++) {
-			const segment = segments[i]!;
-
-			switch (segment) {
-				case "":
-				case ".":
-					break;
-				case "..": {
-					if (nodes.length > 1)
-						current = nodes[nodes.length - 2];
-				} break;
-				default: {
-					if (current && current.type === RegistryNodeType.GROUP) {
-						const child = current.children[segment];
-						current = child;
-					}
-				} break;
-			}
-
-			if (segment !== "") {
-				keys.push(segment);
-				nodes.push(current);
-			}
-		}
-
-		return {
-			keysAlongPath: keys,
-			nodesAlongPath: nodes,
-			finalNode: nodes[nodes.length - 1],
-		};
-	}
 }
 
 export class RegistryError extends Error {
@@ -276,8 +278,8 @@ export interface IRegistryValue<T = unknown> extends IRegistryObject {
 export type RegistryObject = IRegistryGroup | IRegistryValue;
 
 export enum RegistryNodeType {
-	GROUP,
-	VALUE,
+	GROUP = "key",
+	VALUE = "value",
 }
 
 export interface IRegistry {

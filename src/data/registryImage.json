@@ -1,3 +1,11 @@
 {
-	
+	"type": "key",
+	"children": {
+		"Shell": {
+			"type": "key",
+			"children": {
+				
+			}
+		}
+	}
 }
