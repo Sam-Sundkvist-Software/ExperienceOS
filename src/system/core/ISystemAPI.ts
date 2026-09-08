@@ -31,10 +31,10 @@ export default interface ISystemAPI {
 }
 
 export interface ISystemComponentDetails {
-	id: string;
-	name: string;
-	icon: string;
-	version: string;
+	readonly id: string;
+	readonly name: string;
+	readonly version: string;
+	readonly icon?: string;
 }
 
 export interface ISystemComponentAPI {
@@ -52,14 +52,7 @@ export interface IAuthenticationAPI extends ISystemComponentAPI {
 }
 
 export interface IFileSystemAPI extends ISystemComponentAPI {
-	directoryExists(path: string): boolean;
-	fileExists(path: string): boolean;
-	createDirectory(path: string, recurse?: boolean): void;
-	createFile(path: string, overwrite?: boolean): void;
-	readDirectory(path: string): string[];
-	readFile(path: string): string;
-	deleteDirectory(path: string, recurse?: boolean): void;
-	deleteFile(path: string): void;
+	
 }
 
 export interface IRegistryAPI extends ISystemComponentAPI {
