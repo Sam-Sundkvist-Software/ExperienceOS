@@ -23,9 +23,6 @@ export default class WindowManager implements IWindowHost {
 		this.windows = [];
 		this.activeWindowId = null;
 		this.baseZIndex = 100;
-
-		// Disable default context menu
-		document.oncontextmenu = (ev) => ev.preventDefault();
 	}
 
 	public setupShell() {
@@ -422,9 +419,9 @@ export default class WindowManager implements IWindowHost {
 		updateClock();
 	
 		// Disable default context menu globally
-		document.addEventListener('contextmenu', (e) => {
-			if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
-				e.preventDefault();
+		document.addEventListener('contextmenu', (ev) => {
+			if ((ev.target as HTMLElement).tagName !== 'INPUT' && (ev.target as HTMLElement).tagName !== 'TEXTAREA') {
+				ev.preventDefault();
 			}
 		});
 	
