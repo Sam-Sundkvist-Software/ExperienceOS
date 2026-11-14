@@ -467,7 +467,7 @@ export default function createLegacySystemApi(wm: WindowManager, fs: IFileSystem
 				throw new Error("Systray Clock not found");
 			const icon = document.createElement("img");
 			icon.src = options.icon;
-			icon.title = options.title;
+			void options.title;
 			icon.className = 'tray-icon';
 			icon.style.width = '16px';
 			icon.style.height = '16px';
@@ -578,6 +578,7 @@ export default function createLegacySystemApi(wm: WindowManager, fs: IFileSystem
 			target.addEventListener("pointermove", move);
 			target.addEventListener("mouseleave", removeTooltip);
 			// Global cleanup on click
+			// TODO: rid of this garbage
 			document.addEventListener("pointerdown", removeTooltip);
 		},
 
