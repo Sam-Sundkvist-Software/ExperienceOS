@@ -1,3 +1,4 @@
+import { ADR } from "@/system/adr";
 import { legacySystemApi, XpUser, XpUserPrivilege } from "../../api";
 import { showContextMenu } from "../../compfwk";
 import { IRegistry } from "../Registry";
@@ -573,11 +574,7 @@ export default class WindowManager implements IWindowHost {
 					message: 'Type the name of a program, folder, document, or Internet resource, and ExperienceOS will open it for you.',
 					onOk: (cmd) => {
 						if (cmd) {
-							if ((cmd as string).indexOf('C:/') === 0) {
-								legacySystemApi.exec(cmd as string);
-							} else {
-								legacySystemApi.exec('C:/Apps/' + cmd + '.js');
-							}
+							ADR?.load(cmd.toString());
 						}
 					}
 				});

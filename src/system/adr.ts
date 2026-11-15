@@ -97,7 +97,7 @@ export default function createAdr() {
 	return ADR = {
 		load: async (path: string, args?: unknown) => {
 			// Check Lambda Apps first
-			if (LambdaApps[path]) {
+			if (LambdaApps[path] !== undefined) {
 				execute(LambdaApps[path], path, args);
 				return;
 			}
@@ -114,24 +114,34 @@ export default function createAdr() {
 			if (!scriptText) {
 				// Try to fetch from server if not in VFS
 				const url = new URL(
-					`${import.meta.env.BASE_URL}apps/${path}.js`,
+					`${import.meta.env.BASE_URL}/apps/${path}.js`,
 					window.location.origin
 				);
 
 				try {
-					const res = await fetch(url);
-					if (!res.ok)
-						throw new Error("App not found on server");
-					scriptText = await res.text();
-					
+					let module;
+					try {
+						module = await import(url.href);
+						module.default();
+					} catch (e) {
+						legacySystemApi.showDialog({ 
+							title: "ADR Error", 
+							message: `Could not load/execute application module ${path}: ${(e as Error)?.message || "<not Error>"}`, 
+							type: "error"
+						});
+						return;
+					}
+
 					// Cache in VFS for performance if it's a system app
+					/*
 					if (!path.includes("/")) {
 						VFS.writeFile(fullPath, scriptText);
 					}
+					*/
 				} catch (e) {
 					legacySystemApi.showDialog({ 
 						title: "ADR Error", 
-						message: `Could not load application ${path}: ${(e as Error)?.message || "<not Error>"}`, 
+						message: `Application execution error\nCulprit: '${path}'\n${(e as Error)?.message || "<not Error>"}`, 
 						type: "error"
 					});
 					return;
