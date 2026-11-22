@@ -517,7 +517,6 @@ export default class WindowManager implements IWindowHost {
 		if (startMenuItems)
 			startMenuItems.forEach(function(item) {
 				var path = 'C:/StartMenu/' + item;
-				var stat = legacySystemApi.FS.stat(path);
 				var iconUrl = legacySystemApi.getIcon(path);
 				
 				var div = legacySystemApi.createElement({

@@ -1,4 +1,4 @@
-import createLegacySystemApi, { exposeLegacyApi, ILegacySystemAPI, XpUser, XpUserPrivilege } from "../api";
+import createLegacySystemApi, { exposeLegacyApi, ILegacySystemAPI,  } from "../api";
 import { CreateElementOptions } from "../compfwk";
 import Window from "./wm/Window";
 import Authentication, { IAuthentication } from "./Authentication";
@@ -6,7 +6,7 @@ import FileSystem, { IFileSystem } from "./FileSystem";
 import ISystemAPI from "./ISystemAPI";
 import Registry, { IRegistry } from "./Registry";
 import Utils from "./Utils";
-import WindowManager, { showLogonScreen } from "./wm/WindowManager";
+import WindowManager from "./wm/WindowManager";
 import createAdr, { IADR } from "../adr";
 
 export let API: ISystemAPI | undefined;

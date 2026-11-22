@@ -75,7 +75,7 @@ export default class Registry implements ISystemComponent<IRegistryAPI>, IRegist
 
 		let current = this._cache;
 
-		loop: for (let i = 0; i < segments.length; i++) {
+		for (let i = 0; i < segments.length; i++) {
 			const segment = segments[i]!;
 
 			switch (segment) {
@@ -310,6 +310,7 @@ export interface IRegistry {
 
 	/**
 	 * Creates a registry group. If the group already exists, nothing is done.
+	 * @param path
 	 * @param recurse Whether to allow creating several nested groups at once, instead of only the deepest one.
 	 */
 	createGroup(path: string, recurse: boolean): void;
@@ -333,7 +334,8 @@ export interface IRegistry {
 
 	/**
 	 * Deletes a group.
-	 * @param recurse Deletes all sub-groups and sub-items.
+	 * @param path
+	 * @param recurse Deletes all subgroups and sub-items.
 	 * @throws If the group cannot be deleted.
 	 */
 	deleteGroup(path: string, recurse: boolean): void;

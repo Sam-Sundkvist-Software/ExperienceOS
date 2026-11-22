@@ -4,7 +4,6 @@ import WindowManager from "./core/wm/WindowManager"
 import Window, { WindowOptions, WindowType } from "./core/wm/Window";
 import { ADR } from "./adr";
 import { FCCF } from "./compfwk";
-import ISystemAPI from "./core/ISystemAPI";
 import { IFileSystem } from "./core/FileSystem";
 import { IAuthentication } from "./core/Authentication";
 
@@ -198,8 +197,8 @@ export default function createLegacySystemApi(wm: WindowManager, fs: IFileSystem
 					// Simple permission check: 600 (owner only), 644 (owner write, all read)
 					const perms = st.metadata.permissions || "644";
 
-					if (operation === "read") return !!(perms[1]! >= "4" || perms[2]! >= "4");
-					if (operation === "write") return !!(perms[1]! >= "6" || perms[2]! >= "6");
+					if (operation === "read") return (perms[1]! >= "4" || perms[2]! >= "4");
+					if (operation === "write") return (perms[1]! >= "6" || perms[2]! >= "6");
 				}
 
 				// System paths protection
@@ -279,18 +278,18 @@ export default function createLegacySystemApi(wm: WindowManager, fs: IFileSystem
 				if (associations && associations[ext]) {
 					const app = associations[ext];
 					if (app === "ADR") {
-						ADR!.load(path, args);
+						void ADR!.load(path, args);
 					} else {
 						// If it's an app name, load it with the file as argument
 						/** @ts-ignore */
-						ADR.load(app, [path, ...(args || [])]);
+						void ADR.load(app, [path, ...(args || [])]);
 					}
 					return true;
 				}
 			}
 			
 			// Default: Use ADR for direct app execution
-			ADR!.load(path, args);
+			void ADR!.load(path, args);
 			return true;
 		},
 		getSCT: <T>() => {

@@ -1,4 +1,4 @@
-import { BalloonTipOptions, IDialogOptions, IInstallerOptions, ITrayIconOptions, TooltipOptions, XpUser, XpUserPrivilege } from "../api";
+import { BalloonTipOptions, IDialogOptions, IInstallerOptions, ITrayIconOptions, TooltipOptions } from "../api";
 import { CreateElementOptions, MenuItem } from "../compfwk";
 import Window, { WindowOptions } from "./wm/Window";
 

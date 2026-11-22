@@ -1,6 +1,3 @@
-import { legacySystemApi, XpUser } from "./api";
-import { VFS } from "./vfs";
-import { preloadApps } from "./preload";
 import BootCore from "./core/BootCore";
 
 function setupHooks() {
