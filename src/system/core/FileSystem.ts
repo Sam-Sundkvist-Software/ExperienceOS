@@ -18,23 +18,137 @@ export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFi
 	private _mounts: { [x: string]: IFileSystemMount };
 	private _activeMount?: IFileSystemMount;
 
-	private _createInitialMount(): IFileSystemMount {
-		return {
-			name: "c",
-			storage: {
-				nodes: [],
-				nextNodeIndex: 0,
-				freeNodeIds: [],
-			},
-		};
-	}
-
 	public constructor() {
 		const initialMount = this._createInitialMount();
 		this._mounts = {
 			[initialMount.name]: initialMount,
 		};
-		this._activeMount = this._mounts[0];
+		this._activeMount = initialMount;
+	}
+
+	private _createInitialMount(): IFileSystemMount {
+		return {
+			name: "c",
+			storage: {
+				nodes: {
+					0: {
+						type: FileSystemNodeType.DIRECTORY,
+						id: 0,
+						children: {},
+					},
+				},
+				nextNodeIndex: 0,
+				freeNodeIds: [],
+			},
+			rootNodeId: 0,
+		};
+	}
+
+	private _resolveDirectoryNode(node?: FileSystemNode): IFileSystemDirectoryNode {
+		if (node === undefined)
+			throw new FileSystemError("Invalid node.");
+		switch (node.type) {
+			case FileSystemNodeType.LINK:
+				return this._resolveDirectoryNode(this._resolvePath(node.targetPath));
+			case FileSystemNodeType.DIRECTORY:
+				return node;
+			default:
+				throw new FileSystemError("Cannot resolve directory node.");
+		}
+	}
+
+	private _resolvePath(path: string): FileSystemNode {
+		const parts = path.split("/");
+		let currentMount: IFileSystemMount | undefined = this._activeMount;
+		let currentNode: FileSystemNode | undefined = undefined;
+
+		for (let i = 0; i < parts.length; i++) {
+			const part = parts[i];
+
+			if (part === undefined)
+				throw new FileSystemError(`Unexpected error during resolution of path "${path}".`);
+
+			if (part === "")
+				continue;
+
+			if (part.endsWith(":")) {
+				const wantedMountName = part.substring(0, part.length - 1);
+				const mount = this._mounts[wantedMountName];
+
+				if (mount == undefined)
+					throw new FileSystemError(`Invalid mount "${wantedMountName}" encountered during resolution of path "${path}".`);
+
+				currentMount = mount;
+				currentNode = undefined;
+
+				continue;
+			}
+
+			if (currentMount === undefined)
+				throw new FileSystemError(`Active mount not defined, will not infer mount for path "${path}".`);
+
+			if (currentNode === undefined) {
+				const rootNode = currentMount.storage.nodes[currentMount.rootNodeId];
+
+				if (rootNode === undefined)
+					throw new FileSystemError(`Root not found for mount "${currentMount.name}" during resolution of path "${path}".`);
+
+				try {
+					currentNode = this._resolveDirectoryNode(rootNode);
+				} catch (err) {
+					throw new FileSystemError(
+						`Root not valid directory for mount "${currentMount.name}" during resolution of path "${path}".`,
+						{
+							cause: err,
+						}
+					);
+				}
+			}
+
+			switch (part) {
+				case "":
+				case ".":
+					// Ignore
+					break;
+				case "..": {
+					// Back
+					try {
+						const parentNodeId = currentNode.parentId;
+						if (parentNodeId !== undefined)
+							currentNode = this._resolveDirectoryNode(currentMount.storage.nodes[parentNodeId]);
+					} catch (err) {
+						throw new FileSystemError(
+							`Encountered invalid parent node during resolution of path "${path}".`,
+							{
+								cause: err,
+							}
+						);
+					}
+				} break;
+				default: {
+					let currentDirectoryNode: IFileSystemDirectoryNode;
+					try {
+						currentDirectoryNode = this._resolveDirectoryNode(currentNode);
+					} catch (err) {
+						throw new FileSystemError(
+							`Cannot obtain child of non-directory node for path "${path}".`,
+							{
+								cause: err,
+							}
+						);
+					}
+					const childNodeId = currentDirectoryNode.children[part];
+					if (childNodeId === undefined)
+						throw new FileSystemError(`Child node not found for path "${path}".`);
+					currentNode = currentMount.storage.nodes[childNodeId];
+				} break;
+			}
+		}
+
+		if (currentNode === undefined)
+			throw new FileSystemError(`Invalid node for path "${path}".`);
+
+		return currentNode;
 	}
 
 	public createApi(): IFileSystemAPI {
@@ -93,13 +207,11 @@ export default class FileSystem implements ISystemComponent<IFileSystemAPI>, IFi
 	}
 
 	public hasMount(name: string): boolean {
-		// TODO: implement
-		return false;
+		return !!(this._mounts[name]);
 	}
 
 	public getMounts(): string[] {
-		// TODO: implement
-		return [];
+		return Object.values(this._mounts).map(v => v.name);
 	}
 
 	public resolvePath(base: string, part: string): string {
@@ -190,6 +302,13 @@ export interface IFileSystem {
 	createDirectory(path: string, recurse: boolean): void;
 }
 
+export class FileSystemError extends Error {
+	constructor(message?: string, options?: ErrorOptions) {
+		super(message, options);
+		this.name = "FileSystemError";
+	}
+}
+
 export interface IFileSystemNodeStorage {
 	nodes: { [id: number]: FileSystemNode };
 	nextNodeIndex: number;
@@ -199,6 +318,7 @@ export interface IFileSystemNodeStorage {
 export interface IFileSystemMount {
 	name: string;
 	storage: IFileSystemNodeStorage;
+	rootNodeId: number;
 }
 
 export enum FileSystemNodeType {
@@ -213,10 +333,10 @@ export interface IFileSystemNodeMetadata {
 }
 
 export enum Permission {
-	READ =		1 << 0,
-	WRITE = 	1 << 1,
-	EXECUTE =	1 << 2,
-	DELETE =	1 << 3,
+	READ    = 1 << 0,
+	WRITE   = 1 << 1,
+	EXECUTE = 1 << 2,
+	DELETE  = 1 << 3,
 }
 
 export type FileSystemAccessEntry = [allow: boolean, permission: Permission];
@@ -226,6 +346,7 @@ export type FileSystemAccess = { [userId: string]: FileSystemAccessEntry[] };
 export interface IFileSystemNode {
 	type: FileSystemNodeType;
 	id: number;
+	parentId?: number;
 	meta?: IFileSystemNodeMetadata;
 }
 

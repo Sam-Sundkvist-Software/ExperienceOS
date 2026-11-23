@@ -88,8 +88,7 @@ export default class Registry implements ISystemComponent<IRegistryAPI>, IRegist
 				} break;
 				default: {
 					if (current && current.type === RegistryNodeType.GROUP) {
-						const child = current.children[segment];
-						current = child;
+						current = current.children[segment];
 					}
 				} break;
 			}
@@ -254,8 +253,8 @@ export default class Registry implements ISystemComponent<IRegistryAPI>, IRegist
 }
 
 export class RegistryError extends Error {
-	public constructor(message?: string, errorOptions?: ErrorOptions) {
-		super(message, errorOptions);
+	public constructor(message?: string, options?: ErrorOptions) {
+		super(message, options);
 		this.name = "RegistryError";
 	}
 }
